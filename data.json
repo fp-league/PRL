@@ -1,0 +1,351 @@
+{
+  "league": {
+    "name": "PRL",
+    "full": "Premier Racing League",
+    "season": "F1 26 — Season 1"
+  },
+  "points": [
+    25,
+    18,
+    15,
+    12,
+    10,
+    8,
+    6,
+    4,
+    2,
+    1
+  ],
+  "teams": [
+    {
+      "id": "mcl",
+      "name": "McLaren",
+      "color": "#FF8000",
+      "base": "Woking, UK",
+      "principal": "TBC"
+    },
+    {
+      "id": "fer",
+      "name": "Ferrari",
+      "color": "#E8002D",
+      "base": "Maranello, Italy",
+      "principal": "TBC"
+    },
+    {
+      "id": "rbr",
+      "name": "Red Bull Racing",
+      "color": "#3671C6",
+      "base": "Milton Keynes, UK",
+      "principal": "TBC"
+    },
+    {
+      "id": "mer",
+      "name": "Mercedes",
+      "color": "#27F4D2",
+      "base": "Brackley, UK",
+      "principal": "TBC"
+    },
+    {
+      "id": "ast",
+      "name": "Aston Martin",
+      "color": "#229971",
+      "base": "Silverstone, UK",
+      "principal": "TBC"
+    },
+    {
+      "id": "alp",
+      "name": "Alpine",
+      "color": "#FF87BC",
+      "base": "Enstone, UK",
+      "principal": "TBC"
+    },
+    {
+      "id": "wil",
+      "name": "Williams",
+      "color": "#64C4FF",
+      "base": "Grove, UK",
+      "principal": "TBC"
+    },
+    {
+      "id": "rb",
+      "name": "Racing Bulls",
+      "color": "#6692FF",
+      "base": "Faenza, Italy",
+      "principal": "TBC"
+    },
+    {
+      "id": "haa",
+      "name": "Haas",
+      "color": "#B6BABD",
+      "base": "Kannapolis, USA",
+      "principal": "TBC"
+    },
+    {
+      "id": "aud",
+      "name": "Audi",
+      "color": "#BB0A30",
+      "base": "Hinwil, Switzerland",
+      "principal": "TBC"
+    },
+    {
+      "id": "cad",
+      "name": "Cadillac",
+      "color": "#C9B37E",
+      "base": "Indianapolis, USA",
+      "principal": "TBC"
+    }
+  ],
+  "drivers": [
+    {
+      "id": "d1",
+      "name": "Driver One",
+      "number": 1,
+      "team": "mcl",
+      "country": "GB"
+    },
+    {
+      "id": "d2",
+      "name": "Driver Two",
+      "number": 2,
+      "team": "mcl",
+      "country": "GB"
+    },
+    {
+      "id": "d3",
+      "name": "Driver Three",
+      "number": 3,
+      "team": "fer",
+      "country": "GB"
+    },
+    {
+      "id": "d4",
+      "name": "Driver Four",
+      "number": 4,
+      "team": "fer",
+      "country": "GB"
+    },
+    {
+      "id": "d5",
+      "name": "Driver Five",
+      "number": 5,
+      "team": "rbr",
+      "country": "GB"
+    },
+    {
+      "id": "d6",
+      "name": "Driver Six",
+      "number": 6,
+      "team": "rbr",
+      "country": "GB"
+    },
+    {
+      "id": "d7",
+      "name": "Driver Seven",
+      "number": 7,
+      "team": "mer",
+      "country": "GB"
+    },
+    {
+      "id": "d8",
+      "name": "Driver Eight",
+      "number": 8,
+      "team": "mer",
+      "country": "GB"
+    },
+    {
+      "id": "d9",
+      "name": "Driver Nine",
+      "number": 9,
+      "team": "ast",
+      "country": "GB"
+    },
+    {
+      "id": "d10",
+      "name": "Driver Ten",
+      "number": 10,
+      "team": "ast",
+      "country": "GB"
+    },
+    {
+      "id": "d11",
+      "name": "Driver Eleven",
+      "number": 11,
+      "team": "alp",
+      "country": "GB"
+    },
+    {
+      "id": "d12",
+      "name": "Driver Twelve",
+      "number": 12,
+      "team": "alp",
+      "country": "GB"
+    },
+    {
+      "id": "d13",
+      "name": "Driver Thirteen",
+      "number": 13,
+      "team": "wil",
+      "country": "GB"
+    },
+    {
+      "id": "d14",
+      "name": "Driver Fourteen",
+      "number": 14,
+      "team": "wil",
+      "country": "GB"
+    },
+    {
+      "id": "d15",
+      "name": "Driver Fifteen",
+      "number": 15,
+      "team": "rb",
+      "country": "GB"
+    },
+    {
+      "id": "d16",
+      "name": "Driver Sixteen",
+      "number": 16,
+      "team": "rb",
+      "country": "GB"
+    },
+    {
+      "id": "d17",
+      "name": "Driver Seventeen",
+      "number": 17,
+      "team": "haa",
+      "country": "GB"
+    },
+    {
+      "id": "d18",
+      "name": "Driver Eighteen",
+      "number": 18,
+      "team": "haa",
+      "country": "GB"
+    },
+    {
+      "id": "d19",
+      "name": "Driver Nineteen",
+      "number": 19,
+      "team": "aud",
+      "country": "GB"
+    },
+    {
+      "id": "d20",
+      "name": "Driver Twenty",
+      "number": 20,
+      "team": "aud",
+      "country": "GB"
+    },
+    {
+      "id": "d21",
+      "name": "Driver 21",
+      "number": 21,
+      "team": "cad",
+      "country": "GB"
+    },
+    {
+      "id": "d22",
+      "name": "Driver 22",
+      "number": 22,
+      "team": "cad",
+      "country": "GB"
+    }
+  ],
+  "calendar": [
+    {
+      "round": 1,
+      "name": "Australian Grand Prix",
+      "track": "Albert Park",
+      "country": "AU",
+      "date": "2026-11-22T20:00"
+    },
+    {
+      "round": 2,
+      "name": "Chinese Grand Prix",
+      "track": "Shanghai",
+      "country": "CN",
+      "date": "2026-11-29T20:00"
+    },
+    {
+      "round": 3,
+      "name": "Japanese Grand Prix",
+      "track": "Suzuka",
+      "country": "JP",
+      "date": "2026-12-06T20:00"
+    },
+    {
+      "round": 4,
+      "name": "Bahrain Grand Prix",
+      "track": "Sakhir",
+      "country": "BH",
+      "date": "2026-12-13T20:00"
+    },
+    {
+      "round": 5,
+      "name": "Miami Grand Prix",
+      "track": "Miami Intl Autodrome",
+      "country": "US",
+      "date": "2027-01-03T20:00"
+    },
+    {
+      "round": 6,
+      "name": "Monaco Grand Prix",
+      "track": "Monte Carlo",
+      "country": "MC",
+      "date": "2027-01-10T20:00"
+    },
+    {
+      "round": 7,
+      "name": "British Grand Prix",
+      "track": "Silverstone",
+      "country": "GB",
+      "date": "2027-01-17T20:00"
+    },
+    {
+      "round": 8,
+      "name": "Belgian Grand Prix",
+      "track": "Spa-Francorchamps",
+      "country": "BE",
+      "date": "2027-01-24T20:00"
+    },
+    {
+      "round": 9,
+      "name": "Italian Grand Prix",
+      "track": "Monza",
+      "country": "IT",
+      "date": "2027-01-31T20:00"
+    },
+    {
+      "round": 10,
+      "name": "Singapore Grand Prix",
+      "track": "Marina Bay",
+      "country": "SG",
+      "date": "2027-02-07T20:00"
+    },
+    {
+      "round": 11,
+      "name": "Brazilian Grand Prix",
+      "track": "Interlagos",
+      "country": "BR",
+      "date": "2027-02-14T20:00"
+    },
+    {
+      "round": 12,
+      "name": "Abu Dhabi Grand Prix",
+      "track": "Yas Marina",
+      "country": "AE",
+      "date": "2027-02-21T20:00"
+    }
+  ],
+  "results": [],
+  "news": [
+    {
+      "id": "n1",
+      "date": "2026-11-15",
+      "title": "Welcome to PRL Season 1",
+      "tag": "League",
+      "body": "The Premier Racing League is officially live. 22 drivers, 11 teams, 12 rounds — lights out in Melbourne next Sunday."
+    }
+  ],
+  "transfers": []
+}
