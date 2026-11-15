@@ -107,6 +107,14 @@
           "track": "Sahir International Circuit",
           "country": "BAHRAIN",
           "date": "2026-10-19T20:00"
+        },
+        {
+          "id": "cc89jar",
+          "round": 2,
+          "name": "Miami Grand Prix",
+          "track": "Miami Circuit",
+          "country": "USA",
+          "date": ""
         }
       ],
       "results": []
