@@ -147,6 +147,14 @@
           "track": "Autodromo Nazionale Monza",
           "country": "ITALY",
           "date": ""
+        },
+        {
+          "id": "cxotrwy",
+          "round": 7,
+          "name": "Singapore Grand Prix",
+          "track": "Marina Bay Street Circuit",
+          "country": "SINGAPORE",
+          "date": ""
         }
       ],
       "results": []
