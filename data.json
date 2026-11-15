@@ -163,6 +163,14 @@
           "track": "Autódromo Hermanos Rodríguez",
           "country": "MEXICO",
           "date": ""
+        },
+        {
+          "id": "cnym96h",
+          "round": 9,
+          "name": "Azerbaijan Grand Prix",
+          "track": "Baku City Circuit",
+          "country": "BAKU",
+          "date": ""
         }
       ],
       "results": []
