@@ -2,7 +2,7 @@
   "league": {
     "name": "PRL",
     "full": "Pinnacle Racing League",
-    "season": "F1 26 — Season 1"
+    "season": "F1 26 \u2014 Season 1"
   },
   "points": [
     25,
@@ -106,7 +106,8 @@
           "name": "Bahrain Grand Prix",
           "track": "Sahir International Circuit",
           "country": "BAHRAIN",
-          "date": "2026-10-19T20:00"
+          "date": "2026-10-19T20:00",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/29/Bahrain_International_Circuit--Grand_Prix_Layout.svg/1280px-Bahrain_International_Circuit--Grand_Prix_Layout.svg.png"
         },
         {
           "id": "cc89jar",
@@ -114,7 +115,8 @@
           "name": "Miami Grand Prix",
           "track": "Miami Circuit",
           "country": "USA",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/49/Hard_Rock_Stadium_Circuit_2022.svg/1280px-Hard_Rock_Stadium_Circuit_2022.svg.png"
         },
         {
           "id": "cs2tnyy",
@@ -130,7 +132,8 @@
           "name": "Imola Grand Prix",
           "track": "Autodromo Internazionale Enzo e Dino Ferrari",
           "country": "ITALY",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/22/Imola_2009.svg/1280px-Imola_2009.svg.png"
         },
         {
           "id": "c26k88x",
@@ -138,7 +141,8 @@
           "name": "Netherlands Grand Prix",
           "track": "Circuit Zandvoort",
           "country": "NETHERLANDS",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/7/78/Zandvoort_Circuit.png"
         },
         {
           "id": "cxs87j5",
@@ -146,7 +150,8 @@
           "name": "Italian Grand Prix",
           "track": "Autodromo Nazionale Monza",
           "country": "ITALY",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f8/Monza_track_map.svg/1280px-Monza_track_map.svg.png"
         },
         {
           "id": "cxotrwy",
@@ -154,15 +159,17 @@
           "name": "Singapore Grand Prix",
           "track": "Marina Bay Street Circuit",
           "country": "SINGAPORE",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8b/Marina_Bay_circuit_2023.svg/1280px-Marina_Bay_circuit_2023.svg.png"
         },
         {
           "id": "c6ryqkh",
           "round": 8,
           "name": "Mexico Grand Prix",
-          "track": "Autódromo Hermanos Rodríguez",
+          "track": "Aut\u00f3dromo Hermanos Rodr\u00edguez",
           "country": "MEXICO",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Aut%C3%B3dromo_Hermanos_Rodr%C3%ADguez_2015.svg/1280px-Aut%C3%B3dromo_Hermanos_Rodr%C3%ADguez_2015.svg.png"
         },
         {
           "id": "cnym96h",
@@ -170,7 +177,8 @@
           "name": "Azerbaijan Grand Prix",
           "track": "Baku City Circuit",
           "country": "BAKU",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f1/Baku_Formula_One_circuit_map.svg/1280px-Baku_Formula_One_circuit_map.svg.png"
         },
         {
           "id": "c8x9u12",
@@ -178,15 +186,17 @@
           "name": "MYSTERY",
           "track": "???",
           "country": "???",
-          "date": ""
+          "date": "",
+          "image": "assets/tracks/mystery.svg"
         },
         {
           "id": "csf3hbn",
           "round": 11,
           "name": "Brazilian Grand Prix",
-          "track": "Autódromo José Carlos Pace",
+          "track": "Aut\u00f3dromo Jos\u00e9 Carlos Pace",
           "country": "BRAZIL",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Aut%C3%B3dromo_Jos%C3%A9_Carlos_Pace_%28AKA_Interlagos%29_track_map.svg/1280px-Aut%C3%B3dromo_Jos%C3%A9_Carlos_Pace_%28AKA_Interlagos%29_track_map.svg.png"
         },
         {
           "id": "cgo92ye",
@@ -194,7 +204,8 @@
           "name": "Las Vegas Grand Prix",
           "track": "Las Vegas Strip Circuit",
           "country": "USA",
-          "date": ""
+          "date": "",
+          "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/2023_Las_Vegas_street_circuit.svg/1280px-2023_Las_Vegas_street_circuit.svg.png"
         }
       ],
       "results": []

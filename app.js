@@ -226,20 +226,23 @@ function newsCard(n, feature){
     <p class="clamp">${esc(n.body).replace(/\n/g,'<br>')}</p>
   </article>`;
 }
+const hasDate = d => d && !isNaN(new Date(d));
+function cdBlock(date){
+  if (!hasDate(date)) return `<div class="countdown cd-msg"><div><b>DATE TBC</b></div></div>`;
+  if (new Date(date) < Date.now()) return `<div class="countdown cd-msg"><div><b>RESULT PENDING</b></div></div>`;
+  return `<div class="countdown" data-cd="${esc(date)}">
+    <div><b data-u="d">00</b><span>DAYS</span></div><div><b data-u="h">00</b><span>HRS</span></div>
+    <div><b data-u="m">00</b><span>MIN</span></div><div><b data-u="s">00</b><span>SEC</span></div></div>`;
+}
 function countdownHTML(r){
   if (!r) return '';
   return `<div class="next-race reveal">
     <div class="nr-info">
       <small>NEXT UP · ROUND ${r.round}</small>
       <h3>${flag(r.country)} ${esc(r.name)}</h3>
-      <p>${esc(r.track)} · ${fmtDate(r.date, { weekday:'short', day:'numeric', month:'short' })} · ${fmtTime(r.date)}</p>
+      <p>${esc(r.track)} · ${hasDate(r.date) ? fmtDate(r.date, { weekday:'short', day:'numeric', month:'short' }) + ' · ' + fmtTime(r.date) : 'Date TBC'}</p>
     </div>
-    <div class="countdown" data-cd="${esc(r.date)}">
-      <div><b data-u="d">00</b><span>DAYS</span></div>
-      <div><b data-u="h">00</b><span>HRS</span></div>
-      <div><b data-u="m">00</b><span>MIN</span></div>
-      <div><b data-u="s">00</b><span>SEC</span></div>
-    </div>
+    ${cdBlock(r.date)}
   </div>`;
 }
 
@@ -436,8 +439,14 @@ pages.drivers = () => {
 };
 
 const RAW = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/`;
-const trackImg = (src, cls, alt) => src ? `<img class="${cls}" src="${esc(src)}" alt="${esc(alt || 'Track map')}" loading="lazy"
-  onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${RAW}'+this.getAttribute('src')}else{this.remove()}">` : '';
+const isWiki = src => /upload\.wikimedia\.org/.test(src || '');
+const trackImg = (src, cls, alt) => src ? `<img class="${cls}${isWiki(src) ? ' inv' : ''}" src="${esc(src)}" alt="${esc(alt || 'Track map')}" loading="lazy"
+  onerror="${/^https?:/.test(src) ? 'this.remove()' : `if(!this.dataset.f){this.dataset.f=1;this.src='${RAW}'+this.getAttribute('src')}else{this.remove()}`}">` : '';
+const wikiCredit = src => {
+  if (!isWiki(src)) return '';
+  const m = decodeURIComponent(src).match(/\/(?:thumb\/)?[0-9a-f]\/[0-9a-f]{2}\/([^/]+)/);
+  return m ? `<a class="sc-credit" href="https://commons.wikimedia.org/wiki/File:${encodeURIComponent(m[1])}" target="_blank" rel="noopener">Map: Wikimedia Commons</a>` : '';
+};
 
 function showcaseHTML(r, isNext){
   if (!r) return '';
@@ -448,15 +457,14 @@ function showcaseHTML(r, isNext){
       ${r.image ? trackImg(r.image, 'sc-track', r.track) : `<div class="sc-empty">${carSVG('#ff6a00')}<span>Track map coming soon</span></div>`}
       <div class="sc-sweep"></div>
       <div class="sc-round">R${String(r.round).padStart(2,'0')}</div>
+      ${wikiCredit(r.image)}
     </div>
     <div class="sc-info">
       <small>${isNext ? '● NEXT RACE' : res ? 'COMPLETED' : 'RACE PREVIEW'} · ROUND ${r.round}</small>
       <h2>${flag(r.country)} ${esc(r.name)}</h2>
       <p class="sc-track-name">${esc(r.track)}</p>
-      <div class="sc-when"><b>${fmtDate(r.date, { weekday:'long', day:'numeric', month:'long' })}</b><span>Lights out ${fmtTime(r.date)}</span></div>
-      ${!res ? `<div class="countdown" data-cd="${esc(r.date)}">
-        <div><b data-u="d">00</b><span>DAYS</span></div><div><b data-u="h">00</b><span>HRS</span></div>
-        <div><b data-u="m">00</b><span>MIN</span></div><div><b data-u="s">00</b><span>SEC</span></div></div>`
+      <div class="sc-when">${hasDate(r.date) ? `<b>${fmtDate(r.date, { weekday:'long', day:'numeric', month:'long' })}</b><span>Lights out ${fmtTime(r.date)}</span>` : `<b>Date TBC</b><span>Keep an eye on the news</span>`}</div>
+      ${!res ? cdBlock(r.date)
         : `<a href="#results" data-round="${r.round}" class="btn sm"><span>View result</span></a>`}
       ${!isNext && nextRace() ? `<button class="btn sm ghost" data-focus="" style="margin-top:14px"><span>← Back to next race</span></button>` : ''}
     </div>
@@ -484,8 +492,8 @@ pages.calendar = () => {
           </div>
         </div>
         <div class="when">
-          <b>${fmtDate(r.date, { day:'numeric', month:'short' })}</b>
-          <small>${fmtTime(r.date)}</small><br>
+          <b>${hasDate(r.date) ? fmtDate(r.date, { day:'numeric', month:'short' }) : 'TBC'}</b>
+          <small>${hasDate(r.date) ? fmtTime(r.date) : ''}</small><br>
           <span class="status ${res?'done':isNext?'next':'up'}">${res?'Completed':isNext?'Next race':'Upcoming'}</span>
         </div>
       </${res ? 'a' : 'div'}>`; }).join('')}</div>`;

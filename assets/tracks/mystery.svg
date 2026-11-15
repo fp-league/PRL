@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800">
+  <defs>
+    <filter id="g" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="14" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <pattern id="chk" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="20" height="20" fill="#fff"/><rect x="20" y="20" width="20" height="20" fill="#fff"/></pattern>
+  </defs>
+  <path d="M170 560 C120 420 180 230 330 190 C470 150 520 300 640 270 C780 235 820 120 960 170 C1090 215 1080 400 980 470 C900 525 820 470 760 540 C700 610 760 690 640 700 C520 710 470 610 380 640 C290 670 210 650 170 560 Z"
+        fill="none" stroke="#ffffff" stroke-width="16" stroke-dasharray="40 26" stroke-linecap="round" opacity=".55"/>
+  <rect x="150" y="520" width="80" height="20" fill="url(#chk)" transform="rotate(-70 190 530)" opacity=".8"/>
+  <g filter="url(#g)" font-family="Arial Black, Arial, sans-serif" font-weight="900" text-anchor="middle" fill="#ff6a00">
+    <text x="600" y="520" font-size="380" letter-spacing="10">???</text>
+  </g>
+  <text x="600" y="600" font-family="Arial, sans-serif" font-weight="700" font-size="40" letter-spacing="22" text-anchor="middle" fill="#ffffff">MYSTERY TRACK</text>
+</svg>
