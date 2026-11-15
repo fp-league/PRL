@@ -1,4 +1,4 @@
-/* PRL — Premier Racing League site */
+/* PRL — Pinnacle Racing League site */
 (() => {
 'use strict';
 
@@ -676,7 +676,7 @@ function render(keepScroll){
   current = r;
   app.innerHTML = `<div class="page">${pages[r]()}</div>`;
   syncTierUI();
-  document.title = (r === 'home' ? '' : r.charAt(0).toUpperCase() + r.slice(1) + ' · ') + 'PRL — Premier Racing League';
+  document.title = (r === 'home' ? '' : r.charAt(0).toUpperCase() + r.slice(1) + ' · ') + 'PRL — Pinnacle Racing League';
   document.querySelectorAll('#desknav a, .menu-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + r));
   moveInk();
   if (keepScroll) { window.scrollTo(0, y); app.querySelector('.page').style.animation = 'none'; }

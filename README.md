@@ -1,4 +1,4 @@
-# PRL — Premier Racing League
+# PRL — Pinnacle Racing League
 
 F1 26 league website. Orange / black / white.
 
