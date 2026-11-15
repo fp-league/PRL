@@ -11,6 +11,21 @@ const app = document.getElementById('app');
 /* ---------- data (live from GitHub) ---------- */
 const clone = o => JSON.parse(JSON.stringify(o));
 let D = null;
+const TIERED = ['home','standings','teams','drivers','calendar','results'];
+let tier = 't1';
+try { tier = localStorage.getItem('prl_tier') || 't1'; } catch(e){}
+function setData(o){
+  // migrate old single-tier format
+  if (!o.tiers) { o.tiers = { t1:{ name:'Tier 1', drivers:o.drivers||[], calendar:o.calendar||[], results:o.results||[] }, t2:{ name:'Tier 2', drivers:[], calendar:[], results:[] } }; }
+  delete o.drivers; delete o.calendar; delete o.results;
+  o.teams = o.teams || []; o.news = o.news || []; o.transfers = o.transfers || [];
+  if (!o.tiers[tier]) tier = Object.keys(o.tiers)[0];
+  ['drivers','calendar','results'].forEach(k => Object.defineProperty(o, k, {
+    get(){ return o.tiers[tier][k]; }, set(v){ o.tiers[tier][k] = v; }, enumerable:false, configurable:true }));
+  D = o; return o;
+}
+const tierIds = () => Object.keys(D.tiers);
+const tierName = (id = tier) => (D.tiers[id] && D.tiers[id].name) || id.toUpperCase();
 const getToken = () => { try { return localStorage.getItem(TOKEN_KEY) || ''; } catch(e){ return ''; } };
 const ghHeaders = (raw) => {
   const h = { 'Accept': raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json' };
@@ -76,6 +91,22 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const team = id => D.teams.find(t => t.id === id) || { name: '—', color: '#555', id: '' };
 const driver = id => D.drivers.find(d => d.id === id) || { name: 'Unknown', number: '', team: '' };
 const flag = cc => (cc && cc.length === 2) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1A5 + c.charCodeAt(0))) : '';
+function carSVG(c, n){
+  return `<svg viewBox="-3 0 66 140" aria-hidden="true">
+    <rect x="-2" y="92" width="13" height="28" rx="3" fill="#111"/><rect x="49" y="92" width="13" height="28" rx="3" fill="#111"/>
+    <rect x="0" y="20" width="11" height="23" rx="3" fill="#111"/><rect x="49" y="20" width="11" height="23" rx="3" fill="#111"/>
+    <path d="M10 31L25 36M10 33L24 44M50 31L35 36M50 33L36 44M10 104L18 100M50 104L42 100" stroke="#333" stroke-width="2"/>
+    <rect x="4" y="3" width="52" height="8" rx="2" fill="${c}"/><rect x="2" y="2" width="4" height="11" rx="1" fill="#111"/><rect x="54" y="2" width="4" height="11" rx="1" fill="#111"/>
+    <path d="M26 9L34 9L37 52L23 52Z" fill="${c}"/>
+    <path d="M22 50Q30 45 38 50L46 66L47 100Q44 113 38 119L22 119Q16 113 13 100L14 66Z" fill="${c}"/>
+    <path d="M14 68L21 62L21 104L15 101Z M46 68L39 62L39 104L45 101Z" fill="#000" opacity=".28"/>
+    <rect x="28" y="72" width="4" height="44" fill="#fff" opacity=".85"/>
+    <ellipse cx="30" cy="64" rx="5.5" ry="9" fill="#111"/><circle cx="30" cy="65" r="3.6" fill="#fff"/>
+    <path d="M23.5 59Q30 50 36.5 59" stroke="#222" stroke-width="2.4" fill="none"/>
+    <rect x="6" y="124" width="48" height="10" rx="1.5" fill="#111"/><rect x="6" y="124" width="48" height="3" fill="${c}"/>
+    ${n ? `<text x="30" y="132.5" font-size="8" font-weight="900" text-anchor="middle" fill="#fff" font-family="sans-serif">${n}</text>` : ''}
+  </svg>`;
+}
 const fmtDate = (s, opts) => { const d = new Date(s); return isNaN(d) ? esc(s) : d.toLocaleDateString('en-GB', opts || { day:'numeric', month:'short', year:'numeric' }); };
 const fmtTime = s => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }); };
 const byRound = () => [...D.calendar].sort((a,b) => a.round - b.round);
@@ -134,7 +165,7 @@ function nextRace(){
 /* ---------- shared bits ---------- */
 const head = (kicker, title, ghost, sub='') => `
   <div class="page-head">
-    <div class="kicker">${kicker}</div>
+    <div class="kicker">${TIERED.includes(current) ? `<span class="kt">${esc(tierName())}</span>` : ''}${kicker}</div>
     <h1>${title}</h1>
     ${sub ? `<p class="sub">${sub}</p>` : ''}
     <div class="ghost">${ghost}</div>
@@ -202,31 +233,124 @@ pages.home = () => {
   const S = compute();
   const top = S.drivers.slice(0,3);
   const news = [...D.news].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0,3);
-  const done = D.results.length, total = D.calendar.length;
+  const rounds = byRound(), done = D.results.length, total = rounds.length;
+  const nx = nextRace();
+  const lastRes = [...D.results].sort((a,b) => b.round - a.round)[0];
+  const lastRace = lastRes && rounds.find(r => r.round === lastRes.round);
+  const leader = S.drivers[0] && S.drivers[0].starts ? S.drivers[0] : null;
+  const lastTx = [...D.transfers].sort((a,b) => (b.date||'').localeCompare(a.date||''))[0];
+
   const pod = (s, cls, pos) => { if (!s) return `<div class="pod ${cls}"><div class="pos">${pos}</div><h4>TBD</h4></div>`;
     const d = driver(s.id), t = team(d.team);
-    return `<div class="pod ${cls}" style="--tc:${t.color}"><div class="pos">${pos}</div><h4>${esc(d.name)}</h4><div class="tm">${esc(t.name)}</div><div class="pts">${s.pts}<small>PTS</small></div></div>`; };
+    return `<div class="pod ${cls}" style="--tc:${t.color}"><div class="pos">${pos}</div><h4>${esc(d.name)}</h4><div class="tm">${esc(t.name)}</div><div class="pts"><span data-count="${s.pts}">0</span><small>PTS</small></div></div>`; };
+
+  const tick = [
+    nx && `<b>NEXT</b> R${nx.round} ${esc(nx.name)} · ${fmtDate(nx.date,{weekday:'short',day:'numeric',month:'short'})} ${fmtTime(nx.date)}`,
+    leader && `<b>LEADER</b> ${esc(driver(leader.id).name)} · ${leader.pts} PTS`,
+    lastRace && `<b>LAST WIN</b> ${esc(driver(classify(lastRes).find(e=>e.pos===1)?.d).name)} · ${esc(lastRace.name)}`,
+    lastTx && `<b>TRANSFER</b> ${esc(lastTx.driver)} → ${lastTx.to ? esc(team(lastTx.to).name) : 'Released'}`,
+    news[0] && `<b>NEWS</b> ${esc(news[0].title)}`,
+    `<b>PRL</b> ${esc(D.league.season)}`
+  ].filter(Boolean);
+  const tickHTML = tick.map(t => `<span>${t}</span><i>◆</i>`).join('');
+
+  const nIdx = nx ? rounds.findIndex(r => r.round === nx.round) : total - 1;
+  const prog = total > 1 ? Math.max(0, nIdx) / (total - 1) * 100 : 0;
+
+  let lastCard = '';
+  if (lastRes) {
+    const cl = classify(lastRes).filter(e => e.pos !== 'DNF').slice(0,3);
+    const w = cl[0] && driver(cl[0].d), wt = cl[0] && team(cl[0].t);
+    lastCard = `<h2 class="section-title">Last Race <a href="#results" data-round="${lastRes.round}">FULL RESULT →</a></h2>
+    <a href="#results" data-round="${lastRes.round}" class="card last-race reveal" style="--tc:${wt ? wt.color : 'var(--or)'}">
+      <div class="lr-left">
+        <small>ROUND ${lastRes.round} · ${flag(lastRace?.country)} ${esc(lastRace?.track || '')}</small>
+        <h3>${esc(lastRace?.name || 'Round ' + lastRes.round)}</h3>
+        <div class="lr-win"><span>WINNER</span><b>${esc(w?.name || '—')}</b><em>${esc(wt?.name || '')}</em></div>
+      </div>
+      <div class="lr-pod">${cl.map((e,i) => `<div class="lr-p" style="--tc:${team(e.t).color};--h:${[100,72,56][i]}%"><b>${esc(driver(e.d).name)}</b><span>P${i+1}</span></div>`).join('')}</div>
+    </a>`;
+  }
+
   return `
-  <section class="hero">
+  <section class="hero" id="hero">
+    <canvas class="hero-canvas"></canvas>
     <div class="hero-bg"></div>
     <div class="hero-stripes"><i></i><i></i><i></i></div>
     <div class="hero-inner">
       <span class="hero-tag">${esc(D.league.season)}</span>
-      <h1>PR<em>L</em></h1>
+      <h1 class="hero-title" aria-label="PRL"><span style="--i:0">P</span><span style="--i:1">R</span><em style="--i:2">L</em></h1>
       <h2>${esc(D.league.full)}</h2>
       <div class="hero-cta">
         <a href="#standings" class="btn"><span>Standings</span></a>
         <a href="#calendar" class="btn ghost"><span>Calendar</span></a>
+        <button class="btn ghost replay" data-replay><span>▶ Lights out</span></button>
       </div>
     </div>
+    <img class="hero-logo" src="assets/logo.png" alt="PRL logo" onerror="this.remove()">
+    <div class="hero-car hc1">${carSVG('#ff6a00')}</div>
+    <div class="hero-car hc2">${carSVG('#ffffff')}</div>
+    <div class="ticker"><div class="ticker-track">${tickHTML}${tickHTML}${tickHTML}${tickHTML}</div></div>
   </section>
-  ${countdownHTML(nextRace())}
+  ${countdownHTML(nx)}
+  <div class="stats-row reveal">
+    <div><b data-count="${done}">0</b><span>/ ${total} ROUNDS</span></div>
+    <div><b data-count="${D.drivers.length}">0</b><span>DRIVERS</span></div>
+    <div><b data-count="${D.teams.length}">0</b><span>TEAMS</span></div>
+    <div><b data-count="${leader ? leader.pts : 0}">0</b><span>LEADER PTS</span></div>
+  </div>
+  <h2 class="section-title">Season Progress <a href="#calendar">CALENDAR →</a></h2>
+  ${!total ? `<div class="empty">The ${esc(tierName())} calendar hasn't been announced yet.</div>` : ''}
+  <div class="season-track reveal" style="--p:${prog}%;${total ? '' : 'display:none'}">
+    <div class="st-line"><div class="st-fill"></div></div>
+    ${rounds.map((r,i) => `<a href="#calendar" class="st-dot ${resultFor(r.round)?'done':''} ${nx&&nx.round===r.round?'next':''}" style="left:${total>1?i/(total-1)*100:0}%" title="R${r.round} ${esc(r.name)}"><span>${flag(r.country)}</span><small>R${r.round}</small></a>`).join('')}
+    <div class="st-car">${carSVG('#ff6a00')}</div>
+  </div>
   <h2 class="section-title">Championship Leaders <a href="#standings">FULL TABLE →</a></h2>
   <div class="podium reveal">${pod(top[1],'p2',2)}${pod(top[0],'p1',1)}${pod(top[2],'p3',3)}</div>
-  <p class="sub" style="margin-top:12px">${done} of ${total} rounds complete.</p>
+  ${lastCard}
   <h2 class="section-title">Latest News <a href="#news">ALL NEWS →</a></h2>
   <div class="grid g3">${news.map(n => newsCard(n)).join('') || '<div class="empty">No news yet.</div>'}</div>`;
 };
+
+/* home page effects: speed-streak canvas, parallax, count-ups */
+function homeFX(){
+  const hero = document.getElementById('hero'); if (!hero) return;
+  const cv = hero.querySelector('.hero-canvas'), ctx = cv.getContext('2d');
+  let W, H, P = [];
+  const size = () => { const r = hero.getBoundingClientRect(); W = cv.width = r.width * devicePixelRatio; H = cv.height = r.height * devicePixelRatio; };
+  size(); addEventListener('resize', size);
+  const spawn = (y) => ({ x: Math.random() * W * 1.3 - W * .15, y: y ?? H + Math.random() * H * .3, l: (40 + Math.random() * 160) * devicePixelRatio,
+    v: (6 + Math.random() * 16) * devicePixelRatio, a: .08 + Math.random() * .35, o: Math.random() < .3 });
+  for (let i = 0; i < 70; i++) P.push(spawn(Math.random() * H));
+  const ang = -1.2, dx = Math.cos(ang), dy = Math.sin(ang);
+  (function loop(){
+    if (!cv.isConnected) { removeEventListener('resize', size); return; }
+    ctx.clearRect(0, 0, W, H);
+    P.forEach((p, i) => {
+      p.x += dx * p.v; p.y += dy * p.v;
+      const g = ctx.createLinearGradient(p.x, p.y, p.x - dx * p.l, p.y - dy * p.l);
+      const c = p.o ? '255,106,0' : '255,255,255';
+      g.addColorStop(0, `rgba(${c},${p.a})`); g.addColorStop(1, `rgba(${c},0)`);
+      ctx.strokeStyle = g; ctx.lineWidth = (p.o ? 2 : 1) * devicePixelRatio;
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - dx * p.l, p.y - dy * p.l); ctx.stroke();
+      if (p.y < -p.l || p.x > W + p.l) P[i] = spawn();
+    });
+    requestAnimationFrame(loop);
+  })();
+  hero.addEventListener('pointermove', e => {
+    const r = hero.getBoundingClientRect();
+    hero.style.setProperty('--mx', ((e.clientX - r.left) / r.width - .5).toFixed(3));
+    hero.style.setProperty('--my', ((e.clientY - r.top) / r.height - .5).toFixed(3));
+  });
+}
+function countUps(){
+  app.querySelectorAll('[data-count]').forEach(el => {
+    const to = +el.dataset.count, t0 = performance.now(), dur = 1300;
+    const step = now => { const k = Math.min(1, (now - t0) / dur); el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); };
+    requestAnimationFrame(step);
+  });
+}
 
 pages.standings = () => {
   const S = compute();
@@ -246,7 +370,7 @@ pages.transfers = () => {
       const f = team(x.from), t = team(x.to);
       return `<div class="card tx reveal">
         <time>${fmtDate(x.date)}</time>
-        <div class="drvname">${esc(x.driver)}<span class="tx-type">${esc(x.type || 'Transfer')}</span></div>
+        <div class="drvname">${esc(x.driver)}<span class="tx-type">${esc(x.type || 'Transfer')}</span>${x.toTier ? `<span class="tx-tier">${x.fromTier && x.fromTier !== x.toTier ? esc(tierName(x.fromTier)) + ' → ' : ''}${esc(tierName(x.toTier))}</span>` : ''}</div>
         <span></span>
         <div class="from" style="--c:${x.from ? f.color : '#444'}">${x.from ? esc(f.name) : 'Free Agent'}</div>
         <div class="arrow">→</div>
@@ -278,6 +402,7 @@ pages.teams = () => {
 pages.drivers = () => {
   const S = compute();
   return head('The Grid', 'Dri<span>vers</span>', String(D.drivers.length).padStart(2,'0')) +
+    (!D.drivers.length ? `<div class="empty">No ${esc(tierName())} drivers signed yet.</div>` : '') +
     `<div class="grid g4">${S.drivers.map((s,i) => { const d = driver(s.id), t = team(d.team);
       return `<div class="card drv reveal" style="--tc:${t.color}">
         <div class="big">${esc(d.number)}</div>
@@ -296,7 +421,7 @@ pages.drivers = () => {
 pages.calendar = () => {
   const nx = nextRace();
   return head('Season Schedule', 'Calen<span>dar</span>', String(D.calendar.length).padStart(2,'0')) +
-    countdownHTML(nx) + `<div class="cal" style="margin-top:28px">${byRound().map(r => {
+    countdownHTML(nx) + (!D.calendar.length ? `<div class="empty">The ${esc(tierName())} calendar hasn't been announced yet.</div>` : '') + `<div class="cal" style="margin-top:28px">${byRound().map(r => {
       const res = resultFor(r.round); const isNext = nx && nx.round === r.round;
       const winner = res ? classify(res).find(e => e.pos === 1) : null;
       return `<a href="#results" data-round="${r.round}" class="card race reveal ${res?'is-done':''} ${isNext?'is-next':''}">
@@ -364,7 +489,8 @@ pages.admin = () => {
   const tabs = ['results','drivers','teams','calendar','news','transfers','settings'];
   const [st, txt] = setSync.last || ['ok', '✓ Connected — changes go live automatically'];
   return head('Race Control', 'Ad<span>min</span>', 'RC') + `
-    <div id="syncState" class="sync ${st}">${txt}</div>
+    <div class="admin-meta"><div id="syncState" class="sync ${st}">${txt}</div>
+      <div class="editing-tier">Editing <b>${esc(tierName())}</b> <small>— switch with the tier toggle at the top</small></div></div>
     <div class="admin-tabs">${tabs.map(t => `<button data-at="${t}" class="${t===tab?'on':''}">${t}</button>`).join('')}
       <button data-logout style="margin-left:auto">Log out</button></div>
     <div id="adminBody">${adminTabs[tab]()}</div>`;
@@ -409,7 +535,7 @@ const CRUD = {
   transfers: { title:'Transfer', id:'x', list:()=>[...D.transfers].sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     label:x=>`${esc(x.driver)} — ${x.from?esc(team(x.from).name):'Free Agent'} → ${x.to?esc(team(x.to).name):'Released'}`, sub:x=>`${x.type||'Transfer'} · ${fmtDate(x.date)}`,
     fields:[{k:'driver',l:'Driver',t:'driverText'},{k:'from',l:'From',t:'teamOpt'},{k:'to',l:'To',t:'teamOpt'},
-            {k:'type',l:'Type',t:'select',o:['Transfer','Signing','Swap','Release','Loan','Reserve']},{k:'date',l:'Date',t:'date'},{k:'note',l:'Note',t:'textarea'}] }
+            {k:'toTier',l:'Into tier',t:'tier'},{k:'type',l:'Type',t:'select',o:['Transfer','Signing','Promotion','Relegation','Swap','Release','Loan','Reserve']},{k:'date',l:'Date',t:'date'},{k:'note',l:'Note',t:'textarea'}] }
 };
 const editing = {};
 function crudView(key){
@@ -422,6 +548,7 @@ function crudView(key){
       case 'select': return `<select name="${f.k}">${f.o.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select>`;
       case 'textarea': return `<textarea name="${f.k}">${esc(v)}</textarea>`;
       case 'driverText': return `<input type="text" name="${f.k}" list="dl-drivers" value="${esc(v)}"><datalist id="dl-drivers">${D.drivers.map(d=>`<option value="${esc(d.name)}">`).join('')}</datalist>`;
+      case 'tier': return `<select name="${f.k}">${tierIds().map(id => `<option value="${id}" ${id===(v||tier)?'selected':''}>${esc(tierName(id))}</option>`).join('')}</select>`;
       case 'color': return `<input type="color" name="${f.k}" value="${esc(v||'#ff6a00')}">`;
       default: return `<input type="${f.t||'text'}" name="${f.k}" value="${esc(v)}">`;
     }
@@ -431,7 +558,7 @@ function crudView(key){
     <form data-crud="${key}">
       <div class="form-grid">${c.fields.filter(f=>f.t!=='textarea').map(f => `<label class="field">${f.l}${input(f)}</label>`).join('')}</div>
       ${c.fields.filter(f=>f.t==='textarea').map(f => `<label class="field" style="margin-bottom:16px">${f.l}${input(f)}</label>`).join('')}
-      ${key==='transfers' ? `<label class="chk" style="margin-bottom:14px"><input type="checkbox" name="_apply" checked> Also move this driver to the new team (if they're on the grid)</label>` : ''}
+      ${key==='transfers' ? `<label class="chk" style="margin-bottom:14px"><input type="checkbox" name="_apply" checked> Also update the grid (moves the driver to the new team / tier, adds new signings, removes releases)</label>` : ''}
       <div class="actions"><button class="btn sm"><span>${editing[key] ? 'Save changes' : 'Add ' + c.title}</span></button>
       ${editing[key] ? `<button type="button" class="btn sm ghost" data-cancel="${key}"><span>Cancel</span></button>` : ''}</div>
     </form></div>
@@ -487,6 +614,7 @@ function settingsView(){
       <label class="field">Short name<input type="text" id="lgName" value="${esc(D.league.name)}"></label>
       <label class="field">Full name<input type="text" id="lgFull" value="${esc(D.league.full)}"></label>
       <label class="field">Season label<input type="text" id="lgSeason" value="${esc(D.league.season)}"></label>
+      ${tierIds().map(id => `<label class="field">${id.toUpperCase()} name<input type="text" data-tiername="${id}" value="${esc(tierName(id))}"></label>`).join('')}
       <label class="field">Points (comma separated)<input type="text" id="lgPts" value="${D.points.join(', ')}"></label>
     </div>
     <div class="actions"><button class="btn sm" data-savelg><span>Save settings</span></button>
@@ -509,6 +637,34 @@ const adminTabs = {
 };
 const rerenderAdmin = () => { const b = document.getElementById('adminBody'); if (b) { render(true); } };
 
+/* ---------- tier switch ---------- */
+function syncTierUI(){
+  const box = document.getElementById('tierSwitch'); if (!box || !D) return;
+  const ids = tierIds();
+  if (box.dataset.ids !== ids.join() + ids.map(i => tierName(i)).join()) {
+    box.dataset.ids = ids.join() + ids.map(i => tierName(i)).join();
+    box.innerHTML = `<span class="ts-pill"></span>` + ids.map(id => `<button type="button" data-tier="${id}">${esc(tierName(id))}</button>`).join('');
+    box.querySelectorAll('button').forEach(b => b.onclick = () => switchTier(b.dataset.tier));
+  }
+  const pill = box.querySelector('.ts-pill'), on = box.querySelector(`[data-tier="${tier}"]`);
+  box.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === on));
+  if (on) { pill.style.left = on.offsetLeft + 'px'; pill.style.width = on.offsetWidth + 'px'; }
+}
+let tierBusy = false;
+function switchTier(id){
+  if (id === tier || tierBusy || !D.tiers[id]) return;
+  tierBusy = true; tier = id; try { localStorage.setItem('prl_tier', id); } catch(_){}
+  resDraft = null; Object.keys(editing).forEach(k => editing[k] = null); adminTabs.round = undefined; pages.results.round = null;
+  syncTierUI();
+  const fx = document.getElementById('tierfx');
+  fx.querySelector('b').textContent = tierName(id);
+  fx.dataset.n = (tierIds().indexOf(id) + 1);
+  fx.className = ''; void fx.offsetWidth; fx.className = 'run';
+  setTimeout(() => { render(); }, 620);
+  setTimeout(() => { fx.className = ''; tierBusy = false; }, 1450);
+}
+addEventListener('resize', () => syncTierUI());
+
 /* ---------- router & render ---------- */
 const ROUTES = ['home','standings','transfers','news','teams','drivers','calendar','results','admin'];
 let current = null, first = true;
@@ -517,14 +673,16 @@ function route(){ const h = location.hash.slice(1); return ROUTES.includes(h) ? 
 function render(keepScroll){
   const r = route();
   const y = window.scrollY;
-  app.innerHTML = `<div class="page">${pages[r]()}</div>`;
   current = r;
+  app.innerHTML = `<div class="page">${pages[r]()}</div>`;
+  syncTierUI();
   document.title = (r === 'home' ? '' : r.charAt(0).toUpperCase() + r.slice(1) + ' · ') + 'PRL — Premier Racing League';
   document.querySelectorAll('#desknav a, .menu-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + r));
   moveInk();
   if (keepScroll) { window.scrollTo(0, y); app.querySelector('.page').style.animation = 'none'; }
   else window.scrollTo(0, 0);
   observe(); tick();
+  if (r === 'home') { homeFX(); countUps(); }
 }
 
 function go(){
@@ -583,9 +741,10 @@ setInterval(tick, 1000);
 
 /* ---------- events ---------- */
 app.addEventListener('click', async e => {
-  const t = e.target.closest('button, [data-toggle], [data-round]');
+  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay]');
   if (!t) return;
   if (t.dataset.toggle !== undefined) { t.classList.toggle('open'); return; }
+  if (t.dataset.replay !== undefined) { intro(true); return; }
   if (t.dataset.round) { pages.results.round = +t.dataset.round; return; }
   if (t.closest('[data-tabs="standings"]') && t.dataset.v) { pages.standings.view = t.dataset.v; render(true); return; }
   if (t.dataset.rr) { pages.results.round = +t.dataset.rr; render(true); return; }
@@ -617,7 +776,7 @@ app.addEventListener('click', async e => {
   if (t.dataset.copy !== undefined) { try { await navigator.clipboard.writeText(document.getElementById('exportBox').value); toast('Copied!'); } catch(_) { document.getElementById('exportBox').select(); toast('Press Ctrl/Cmd + C to copy'); } return; }
   if (t.dataset.import !== undefined) {
     try { let s = document.getElementById('importBox').value.trim().replace(/^window\.PRL_DATA\s*=\s*/, '').replace(/;\s*$/, '');
-      const o = JSON.parse(s); if (!o.drivers || !o.teams) throw 0; D = o; resDraft = null; save('Restored backup'); render(true); }
+      const o = JSON.parse(s); if (!(o.tiers || o.drivers) || !o.teams) throw 0; setData(o); resDraft = null; save('Restored backup'); render(true); }
     catch(_) { toast('Could not read that backup'); } return;
   }
   if (t.dataset.disconnect !== undefined) { try { localStorage.removeItem(TOKEN_KEY); } catch(_){} setSync.last = null; toast('Disconnected'); render(true); return; }
@@ -627,11 +786,12 @@ app.addEventListener('click', async e => {
     D.league.season = document.getElementById('lgSeason').value.trim();
     const p = document.getElementById('lgPts').value.split(',').map(x => parseInt(x,10)).filter(x => !isNaN(x));
     if (p.length) D.points = p;
+    document.querySelectorAll('[data-tiername]').forEach(i => { if (i.value.trim()) D.tiers[i.dataset.tiername].name = i.value.trim(); });
     save('Settings saved'); setSeason(); render(true); return;
   }
   if (t.dataset.reset !== undefined) {
     if (t.dataset.confirm !== '1') { t.dataset.confirm='1'; t.querySelector('span').textContent='Click again to discard'; return; }
-    try { D = await loadData(); resDraft = null; setSync.last = null; toast('Reloaded live data'); render(true); } catch(_) { toast('Could not reach GitHub'); } return;
+    try { setData(await loadData()); resDraft = null; setSync.last = null; toast('Reloaded live data'); render(true); } catch(_) { toast('Could not reach GitHub'); } return;
   }
 });
 
@@ -652,7 +812,7 @@ app.addEventListener('submit', async e => {
     let ok = false;
     try { ok = (await sha256(v)) === PASS_HASH; } catch(_) { ok = false; }
     if (ok) { authed = true; try{sessionStorage.setItem('prl_admin','1');}catch(_){} toast('Welcome to Race Control');
-      try { D = await loadData(); } catch(_){}  // make sure we edit the very latest version
+      try { setData(await loadData()); } catch(_){}  // make sure we edit the very latest version
       render(); }
     else { const g = document.getElementById('gate'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake'); toast('Wrong passcode'); }
     return;
@@ -667,7 +827,7 @@ app.addEventListener('submit', async e => {
       if (j.permissions && !j.permissions.push) { toast('That key can\'t write to the repo'); return; }
       try { localStorage.setItem(TOKEN_KEY, tok); } catch(_) { toast('Browser storage blocked'); return; }
       setSync.last = ['ok', '✓ Connected — changes go live automatically'];
-      D = await loadData(); toast('Connected to GitHub'); render(true);
+      setData(await loadData()); toast('Connected to GitHub'); render(true);
     } catch(_) { toast('GitHub didn\'t accept that key'); }
     return;
   }
@@ -681,9 +841,18 @@ app.addEventListener('submit', async e => {
     if (k === 'transfers' && !obj.driver) return toast('Driver required');
     if (k === 'news' && !obj.date) obj.date = new Date().toISOString().slice(0,10);
     if (k === 'transfers' && !obj.date) obj.date = new Date().toISOString().slice(0,10);
-    if (k === 'transfers' && fd.get('_apply')) {
-      const d = D.drivers.find(x => x.name.toLowerCase() === obj.driver.toLowerCase());
-      if (d) { if (obj.to) d.team = obj.to; else D.drivers = D.drivers.filter(x => x !== d); }
+    if (k === 'transfers') {
+      // find the driver in any tier
+      let fromTier = null, d = null;
+      for (const id of tierIds()) { const x = D.tiers[id].drivers.find(x => x.name.toLowerCase() === obj.driver.toLowerCase()); if (x) { fromTier = id; d = x; break; } }
+      obj.fromTier = fromTier || obj.toTier;
+      if (fd.get('_apply') && !editing[k]) {
+        if (d) D.tiers[fromTier].drivers = D.tiers[fromTier].drivers.filter(x => x !== d);
+        if (obj.to) {
+          const nd = d || { id: uid('d'), name: obj.driver, number: 0, country: '' };
+          nd.team = obj.to; D.tiers[obj.toTier].drivers.push(nd);
+        }
+      }
     }
     if (editing[k]) { const i = D[k].findIndex(x => x.id === editing[k]); D[k][i] = { ...D[k][i], ...obj }; editing[k] = null; save(c.title + ' updated'); }
     else { D[k].push({ id: uid(c.id), ...obj }); save(c.title + ' added'); }
@@ -694,24 +863,44 @@ app.addEventListener('submit', async e => {
 /* ---------- boot ---------- */
 function setSeason(){ document.getElementById('season-label').textContent = D.league.season || ''; }
 (async () => {
-  try { D = await loadData(); }
+  try { setData(await loadData()); }
   catch(e) { app.innerHTML = `<div class="empty" style="margin-top:60px">Couldn't load league data. Please refresh.</div>`; return; }
   setSeason(); go();
   // keep visitors up to date: quietly refresh every 60s (not while an admin is editing)
   setInterval(async () => {
     if (current === 'admin' || document.hidden) return;
-    try { const n = await loadData(); if (JSON.stringify(n) !== JSON.stringify(D)) { D = n; setSeason(); render(true); } } catch(_){}
+    try { const n = await loadData(); if (JSON.stringify(n) !== JSON.stringify(D)) { setData(n); setSeason(); render(true); } } catch(_){}
   }, 90000);
 })();
 
-(function lights(){
-  const box = document.getElementById('lights');
-  let seen = false; try { seen = sessionStorage.getItem('prl_lights') === '1'; } catch(_){}
-  if (seen || matchMedia('(prefers-reduced-motion: reduce)').matches) { box.classList.add('done'); return; }
-  const row = box.querySelector('.lights-row'), ls = row.querySelectorAll('span');
-  ls.forEach((l,i) => setTimeout(() => l.classList.add('on'), 250 + i * 330));
-  setTimeout(() => { row.classList.add('out'); }, 250 + 5*330 + 450);
-  setTimeout(() => { box.classList.add('done'); try{sessionStorage.setItem('prl_lights','1');}catch(_){} }, 250 + 5*330 + 1100);
-  box.addEventListener('click', () => box.classList.add('done'));
-})();
+/* ---------- INTRO: lights out → cars launch → logo ---------- */
+function intro(force){
+  const box = document.getElementById('intro');
+  let seen = false; try { seen = sessionStorage.getItem('prl_intro') === '1'; } catch(_){}
+  if ((seen && !force) || matchMedia('(prefers-reduced-motion: reduce)').matches) { box.classList.add('gone'); return; }
+  box.className = ''; document.body.classList.add('intro-on');
+  const row = box.querySelector('.lights-row'), ls = [...row.querySelectorAll('span')];
+  row.classList.remove('out'); ls.forEach(l => l.classList.remove('on'));
+  const cols = ['#FF8000','#E8002D','#3671C6','#27F4D2','#229971','#FF87BC','#64C4FF','#6692FF','#B6BABD','#BB0A30','#C9B37E','#ff6a00'];
+  const colors = (D && D.teams && D.teams.length) ? D.teams.map(t => t.color) : cols;
+  const cars = box.querySelector('.intro-cars');
+  cars.innerHTML = Array.from({ length: 12 }, (_, i) => {
+    const col = i % 2, rw = Math.floor(i / 2);
+    const left = `calc(50% + ${col ? 7.5 : -7.5}vh)`, top = `${50 + rw * 16 + (col ? 8 : 0)}vh`;
+    const d = (i * 75 + Math.random() * 60) | 0, wob = (Math.random() * 1.4 - .7).toFixed(2);
+    return `<div class="icar" style="left:${left};top:${top};--d:${d}ms;--wob:${wob}vh;--c:${colors[i % colors.length]}"><span class="slot"></span>${carSVG(colors[i % colors.length], i + 1)}</div>`;
+  }).join('');
+  const T = []; const at = (ms, fn) => T.push(setTimeout(fn, ms));
+  const step = 480; ls.forEach((l, i) => at(400 + i * step, () => l.classList.add('on')));
+  const out = 400 + 5 * step + 350 + Math.random() * 600;  // random hold, like the real thing
+  const finish = () => { T.forEach(clearTimeout); box.classList.add('exit'); document.body.classList.remove('intro-on');
+    setTimeout(() => { box.classList.add('gone'); }, 850); try { sessionStorage.setItem('prl_intro','1'); } catch(_){} };
+  at(out, () => { row.classList.add('out'); box.classList.add('launch'); });
+  at(out + 1150, () => box.classList.add('flash'));
+  at(out + 1500, () => box.classList.add('logo'));
+  at(out + 3700, finish);
+  box.querySelector('.intro-skip').onclick = finish;
+}
+intro();
+window.PRL_replayIntro = () => intro(true);
 })();
