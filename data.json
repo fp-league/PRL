@@ -139,6 +139,14 @@
           "track": "Circuit Zandvoort",
           "country": "NETHERLANDS",
           "date": ""
+        },
+        {
+          "id": "cxs87j5",
+          "round": 6,
+          "name": "Italian Grand Prix",
+          "track": "Autodromo Nazionale Monza",
+          "country": "ITALY",
+          "date": ""
         }
       ],
       "results": []
