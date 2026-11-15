@@ -2,7 +2,7 @@
   "league": {
     "name": "PRL",
     "full": "Pinnacle Racing League",
-    "season": "F1 26 \u2014 Season 1"
+    "season": "F1 26 — Season 1"
   },
   "points": [
     25,
@@ -92,6 +92,13 @@
       "name": "Cadillac",
       "color": "#C9B37E",
       "base": "Indianapolis, USA",
+      "principal": ""
+    },
+    {
+      "id": "tbha0he",
+      "name": "Mclaren Formula 1 Team",
+      "color": "#ff6a00",
+      "base": "Woking, England",
       "principal": ""
     }
   ],
