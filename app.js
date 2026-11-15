@@ -83,6 +83,23 @@ async function sync(){
   syncing = false;
   if (syncAgain) { syncAgain = false; sync(); }
 }
+/* upload an image file into the repo (resized), returns its path */
+async function uploadImage(file, base){
+  if (!getToken()) throw new Error('auth');
+  const bmp = await createImageBitmap(file);
+  const scale = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas'); cv.width = Math.round(bmp.width * scale); cv.height = Math.round(bmp.height * scale);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  const png = /png|webp|gif|svg/.test(file.type);   // keep transparency for track maps
+  const blob = await new Promise(r => cv.toBlob(r, png ? 'image/png' : 'image/jpeg', .88));
+  const data = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+  const path = `assets/tracks/${base}-${Date.now().toString(36)}.${png ? 'png' : 'jpg'}`;
+  const res = await fetch(`${API}/contents/${path}`, { method:'PUT', headers:{ ...ghHeaders(), 'Content-Type':'application/json' },
+    body: JSON.stringify({ message:`Admin: track image ${path}`, content:data, branch:GH.branch }) });
+  if (res.status === 401 || res.status === 403) throw new Error('auth');
+  if (!res.ok) throw new Error('upload');
+  return path;
+}
 window.addEventListener('beforeunload', e => { if (syncMsgs.length || syncing) { e.preventDefault(); e.returnValue = ''; } });
 const uid = p => p + Math.random().toString(36).slice(2, 8);
 
@@ -418,25 +435,60 @@ pages.drivers = () => {
       </div>`; }).join('')}</div>`;
 };
 
+const RAW = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/`;
+const trackImg = (src, cls, alt) => src ? `<img class="${cls}" src="${esc(src)}" alt="${esc(alt || 'Track map')}" loading="lazy"
+  onerror="if(!this.dataset.f){this.dataset.f=1;this.src='${RAW}'+this.getAttribute('src')}else{this.remove()}">` : '';
+
+function showcaseHTML(r, isNext){
+  if (!r) return '';
+  const res = resultFor(r.round);
+  return `<section class="showcase reveal" id="showcase">
+    <div class="sc-img">
+      <div class="sc-grid"></div>
+      ${r.image ? trackImg(r.image, 'sc-track', r.track) : `<div class="sc-empty">${carSVG('#ff6a00')}<span>Track map coming soon</span></div>`}
+      <div class="sc-sweep"></div>
+      <div class="sc-round">R${String(r.round).padStart(2,'0')}</div>
+    </div>
+    <div class="sc-info">
+      <small>${isNext ? '● NEXT RACE' : res ? 'COMPLETED' : 'RACE PREVIEW'} · ROUND ${r.round}</small>
+      <h2>${flag(r.country)} ${esc(r.name)}</h2>
+      <p class="sc-track-name">${esc(r.track)}</p>
+      <div class="sc-when"><b>${fmtDate(r.date, { weekday:'long', day:'numeric', month:'long' })}</b><span>Lights out ${fmtTime(r.date)}</span></div>
+      ${!res ? `<div class="countdown" data-cd="${esc(r.date)}">
+        <div><b data-u="d">00</b><span>DAYS</span></div><div><b data-u="h">00</b><span>HRS</span></div>
+        <div><b data-u="m">00</b><span>MIN</span></div><div><b data-u="s">00</b><span>SEC</span></div></div>`
+        : `<a href="#results" data-round="${r.round}" class="btn sm"><span>View result</span></a>`}
+      ${!isNext && nextRace() ? `<button class="btn sm ghost" data-focus="" style="margin-top:14px"><span>← Back to next race</span></button>` : ''}
+    </div>
+  </section>`;
+}
+
 pages.calendar = () => {
   const nx = nextRace();
+  const focus = pages.calendar.focus && byRound().find(r => r.round === pages.calendar.focus);
+  const show = focus || nx;
   return head('Season Schedule', 'Calen<span>dar</span>', String(D.calendar.length).padStart(2,'0')) +
-    countdownHTML(nx) + (!D.calendar.length ? `<div class="empty">The ${esc(tierName())} calendar hasn't been announced yet.</div>` : '') + `<div class="cal" style="margin-top:28px">${byRound().map(r => {
+    showcaseHTML(show, show && nx && show.round === nx.round) +
+    (!D.calendar.length ? `<div class="empty">The ${esc(tierName())} calendar hasn't been announced yet.</div>` : '') +
+    `<div class="cal" style="margin-top:28px">${byRound().map(r => {
       const res = resultFor(r.round); const isNext = nx && nx.round === r.round;
       const winner = res ? classify(res).find(e => e.pos === 1) : null;
-      return `<a href="#results" data-round="${r.round}" class="card race reveal ${res?'is-done':''} ${isNext?'is-next':''}">
+      return `<${res ? `a href="#results" data-round="${r.round}"` : `div role="button" tabindex="0" data-focus="${r.round}"`} class="card race reveal ${res?'is-done':''} ${isNext?'is-next':''} ${show && show.round === r.round ? 'is-shown' : ''}">
         <div class="rn">${String(r.round).padStart(2,'0')}</div>
-        <div>
-          <h3>${flag(r.country)} ${esc(r.name)}</h3>
-          <p>${esc(r.track)}</p>
-          ${winner ? `<div class="win">Winner: <b>${esc(driver(winner.d).name)}</b></div>` : ''}
+        <div class="race-mid">
+          ${r.image ? trackImg(r.image, 'race-thumb', r.track) : ''}
+          <div>
+            <h3>${flag(r.country)} ${esc(r.name)}</h3>
+            <p>${esc(r.track)}</p>
+            ${winner ? `<div class="win">Winner: <b>${esc(driver(winner.d).name)}</b></div>` : ''}
+          </div>
         </div>
         <div class="when">
           <b>${fmtDate(r.date, { day:'numeric', month:'short' })}</b>
           <small>${fmtTime(r.date)}</small><br>
           <span class="status ${res?'done':isNext?'next':'up'}">${res?'Completed':isNext?'Next race':'Upcoming'}</span>
         </div>
-      </a>`; }).join('')}</div>`;
+      </${res ? 'a' : 'div'}>`; }).join('')}</div>`;
 };
 
 pages.results = () => {
@@ -528,7 +580,7 @@ const CRUD = {
     fields:[{k:'name',l:'Team name'},{k:'color',l:'Colour',t:'color'},{k:'base',l:'Base'},{k:'principal',l:'Team principal'}] },
   calendar: { title:'Race', id:'c', list:()=>byRound(),
     label:x=>`R${x.round} · ${esc(x.name)}`, sub:x=>`${x.track} · ${fmtDate(x.date)} ${fmtTime(x.date)}`,
-    fields:[{k:'round',l:'Round',t:'number'},{k:'name',l:'Race name'},{k:'track',l:'Track'},{k:'country',l:'Country code'},{k:'date',l:'Date & time',t:'datetime-local'}] },
+    fields:[{k:'round',l:'Round',t:'number'},{k:'name',l:'Race name'},{k:'track',l:'Track'},{k:'country',l:'Country code'},{k:'date',l:'Date & time',t:'datetime-local'},{k:'image',l:'Track image',t:'image'}] },
   news: { title:'Article', id:'n', list:()=>[...D.news].sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     label:x=>esc(x.title), sub:x=>`${x.tag||''} · ${fmtDate(x.date)}`,
     fields:[{k:'title',l:'Headline'},{k:'tag',l:'Tag (e.g. Race Report)'},{k:'date',l:'Date',t:'date'},{k:'body',l:'Article',t:'textarea'}] },
@@ -549,6 +601,9 @@ function crudView(key){
       case 'textarea': return `<textarea name="${f.k}">${esc(v)}</textarea>`;
       case 'driverText': return `<input type="text" name="${f.k}" list="dl-drivers" value="${esc(v)}"><datalist id="dl-drivers">${D.drivers.map(d=>`<option value="${esc(d.name)}">`).join('')}</datalist>`;
       case 'tier': return `<select name="${f.k}">${tierIds().map(id => `<option value="${id}" ${id===(v||tier)?'selected':''}>${esc(tierName(id))}</option>`).join('')}</select>`;
+      case 'image': return `<input type="hidden" name="image" value="${esc(v)}">
+        ${v ? `<div class="img-prev">${trackImg(v, '', 'Current track image')}<label class="chk"><input type="checkbox" name="_rmimg"> Remove</label></div>` : ''}
+        <input type="file" name="_imgfile" accept="image/*" class="file-in">`;
       case 'color': return `<input type="color" name="${f.k}" value="${esc(v||'#ff6a00')}">`;
       default: return `<input type="${f.t||'text'}" name="${f.k}" value="${esc(v)}">`;
     }
@@ -741,10 +796,12 @@ setInterval(tick, 1000);
 
 /* ---------- events ---------- */
 app.addEventListener('click', async e => {
-  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay]');
+  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay], [data-focus]');
   if (!t) return;
   if (t.dataset.toggle !== undefined) { t.classList.toggle('open'); return; }
   if (t.dataset.replay !== undefined) { intro(true); return; }
+  if (t.dataset.focus !== undefined) { pages.calendar.focus = t.dataset.focus ? +t.dataset.focus : null; render(true);
+    document.getElementById('showcase')?.scrollIntoView({ behavior:'smooth', block:'start' }); return; }
   if (t.dataset.round) { pages.results.round = +t.dataset.round; return; }
   if (t.closest('[data-tabs="standings"]') && t.dataset.v) { pages.standings.view = t.dataset.v; render(true); return; }
   if (t.dataset.rr) { pages.results.round = +t.dataset.rr; render(true); return; }
@@ -837,6 +894,15 @@ app.addEventListener('submit', async e => {
     if (k === 'drivers' && !obj.name) return toast('Name required');
     if (k === 'teams' && !obj.name) return toast('Team name required');
     if (k === 'calendar' && !obj.name) return toast('Race name required');
+    if (k === 'calendar') {
+      if (fd.get('_rmimg')) obj.image = '';
+      const file = fd.get('_imgfile');
+      if (file && file.size) {
+        const btn = f.querySelector('button.btn'); btn.disabled = true; btn.querySelector('span').textContent = 'Uploading image…';
+        try { obj.image = await uploadImage(file, `${tier}-r${obj.round}`); }
+        catch(err) { toast(err.message === 'auth' ? 'Connect GitHub in Settings first' : 'Image upload failed'); btn.disabled = false; btn.querySelector('span').textContent = 'Try again'; return; }
+      }
+    }
     if (k === 'news' && !obj.title) return toast('Headline required');
     if (k === 'transfers' && !obj.driver) return toast('Driver required');
     if (k === 'news' && !obj.date) obj.date = new Date().toISOString().slice(0,10);
