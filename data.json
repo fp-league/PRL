@@ -99,7 +99,16 @@
     "t1": {
       "name": "Tier 1",
       "drivers": [],
-      "calendar": [],
+      "calendar": [
+        {
+          "id": "c8ype8t",
+          "round": 1,
+          "name": "Bahrain Grand Prix",
+          "track": "Sahir International Circuit",
+          "country": "BAHRAIN",
+          "date": "2026-10-19T20:00"
+        }
+      ],
       "results": []
     },
     "t2": {
