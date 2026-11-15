@@ -18,13 +18,6 @@
   ],
   "teams": [
     {
-      "id": "mcl",
-      "name": "McLaren",
-      "color": "#FF8000",
-      "base": "Woking, UK",
-      "principal": ""
-    },
-    {
       "id": "fer",
       "name": "Ferrari",
       "color": "#E8002D",
