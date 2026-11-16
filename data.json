@@ -2,7 +2,7 @@
   "league": {
     "name": "PRL",
     "full": "Pinnacle Racing League",
-    "season": "F1 26 \u2014 Season 1"
+    "season": "F1 26 — Season 1"
   },
   "points": [
     25,
@@ -98,7 +98,15 @@
   "tiers": {
     "t1": {
       "name": "Tier 1",
-      "drivers": [],
+      "drivers": [
+        {
+          "id": "df0r2y5",
+          "name": "LUBICKZ",
+          "number": 0,
+          "team": "fer",
+          "country": ""
+        }
+      ],
       "calendar": [
         {
           "id": "c8ype8t",
@@ -166,7 +174,7 @@
           "id": "c6ryqkh",
           "round": 8,
           "name": "Mexico Grand Prix",
-          "track": "Aut\u00f3dromo Hermanos Rodr\u00edguez",
+          "track": "Autódromo Hermanos Rodríguez",
           "country": "MEXICO",
           "date": "",
           "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/36/Aut%C3%B3dromo_Hermanos_Rodr%C3%ADguez_2015.svg/1280px-Aut%C3%B3dromo_Hermanos_Rodr%C3%ADguez_2015.svg.png"
@@ -193,7 +201,7 @@
           "id": "csf3hbn",
           "round": 11,
           "name": "Brazilian Grand Prix",
-          "track": "Aut\u00f3dromo Jos\u00e9 Carlos Pace",
+          "track": "Autódromo José Carlos Pace",
           "country": "BRAZIL",
           "date": "",
           "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cf/Aut%C3%B3dromo_Jos%C3%A9_Carlos_Pace_%28AKA_Interlagos%29_track_map.svg/1280px-Aut%C3%B3dromo_Jos%C3%A9_Carlos_Pace_%28AKA_Interlagos%29_track_map.svg.png"
