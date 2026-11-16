@@ -24,6 +24,7 @@
     <span class="brand-logo xl"><img src="assets/logo.png" alt="PRL" onerror="this.remove()"><b>PRL</b></span>
     <div class="intro-sub">Pinnacle Racing League</div>
   </div>
+  <button class="intro-sound" type="button" data-sound></button>
   <button class="intro-skip" type="button">Skip ›</button>
 </div>
 
@@ -42,6 +43,7 @@
     <span class="brand-sub">Pinnacle Racing League</span>
   </a>
   <div id="tierSwitch" class="tier-switch" aria-label="Choose tier"></div>
+  <a href="#home" id="liveBadge" class="live-badge" hidden><i></i>LIVE</a>
   <nav id="desknav" aria-label="Main">
     <a href="#standings">Standings</a>
     <a href="#transfers">Transfers</a>
@@ -50,6 +52,7 @@
     <a href="#drivers">Drivers</a>
     <a href="#calendar">Calendar</a>
     <a href="#results">Results</a>
+    <a href="#hall">Hall</a>
     <a href="#admin" class="nav-admin" title="Admin">&#128274;</a>
     <span class="nav-ink"></span>
   </nav>
@@ -68,6 +71,7 @@
     <a href="#drivers"><i>05</i>Drivers</a>
     <a href="#calendar"><i>06</i>Calendar</a>
     <a href="#results"><i>07</i>Results</a>
+    <a href="#hall"><i>08</i>Hall of Fame</a>
     <a href="#admin" class="menu-admin"><i>&#128274;</i>Admin</a>
   </nav>
   <div class="menu-foot">PRL · F1 26 LEAGUE</div>
@@ -80,12 +84,15 @@
   <div class="foot-inner">
     <span class="brand-logo small"><img src="assets/logo.png" alt="" onerror="this.remove()"><b>PRL</b></span>
     <span>Pinnacle Racing League · <span id="season-label"></span></span>
+    <button class="foot-sound" type="button" data-sound></button>
   </div>
 </footer>
 
 <div id="toast"></div>
 
 <script src="cars.js"></script>
+<script src="sound.js"></script>
+<script src="garage.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

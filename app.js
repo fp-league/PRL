@@ -11,14 +11,14 @@ const app = document.getElementById('app');
 /* ---------- data (live from GitHub) ---------- */
 const clone = o => JSON.parse(JSON.stringify(o));
 let D = null;
-const TIERED = ['home','standings','teams','drivers','calendar','results'];
+const TIERED = ['home','standings','teams','drivers','calendar','results','driver'];
 let tier = 't1';
 try { tier = localStorage.getItem('prl_tier') || 't1'; } catch(e){}
 function setData(o){
   // migrate old single-tier format
   if (!o.tiers) { o.tiers = { t1:{ name:'Tier 1', drivers:o.drivers||[], calendar:o.calendar||[], results:o.results||[] }, t2:{ name:'Tier 2', drivers:[], calendar:[], results:[] } }; }
   delete o.drivers; delete o.calendar; delete o.results;
-  o.teams = o.teams || []; o.news = o.news || []; o.transfers = o.transfers || [];
+  o.teams = o.teams || []; o.news = o.news || []; o.transfers = o.transfers || []; o.hall = o.hall || []; o.live = o.live || { mode:'auto', url:'', note:'' };
   if (!o.tiers[tier]) tier = Object.keys(o.tiers)[0];
   ['drivers','calendar','results'].forEach(k => Object.defineProperty(o, k, {
     get(){ return o.tiers[tier][k]; }, set(v){ o.tiers[tier][k] = v; }, enumerable:false, configurable:true }));
@@ -84,7 +84,7 @@ async function sync(){
   if (syncAgain) { syncAgain = false; sync(); }
 }
 /* upload an image file into the repo (resized), returns its path */
-async function uploadImage(file, base){
+async function uploadImage(file, base, dir = 'tracks'){
   if (!getToken()) throw new Error('auth');
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
@@ -93,7 +93,7 @@ async function uploadImage(file, base){
   const png = /png|webp|gif|svg/.test(file.type);   // keep transparency for track maps
   const blob = await new Promise(r => cv.toBlob(r, png ? 'image/png' : 'image/jpeg', .88));
   const data = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
-  const path = `assets/tracks/${base}-${Date.now().toString(36)}.${png ? 'png' : 'jpg'}`;
+  const path = `assets/${dir}/${base}-${Date.now().toString(36)}.${png ? 'png' : 'jpg'}`;
   const res = await fetch(`${API}/contents/${path}`, { method:'PUT', headers:{ ...ghHeaders(), 'Content-Type':'application/json' },
     body: JSON.stringify({ message:`Admin: track image ${path}`, content:data, branch:GH.branch }) });
   if (res.status === 401 || res.status === 403) throw new Error('auth');
@@ -122,12 +122,12 @@ function toast(msg){
 }
 
 /* ---------- standings engine ---------- */
-function compute(){
+function compute(upTo = Infinity){
   const pts = D.points || [25,18,15,12,10,8,6,4,2,1];
   const ds = {}, ts = {};
   D.drivers.forEach(d => ds[d.id] = { id:d.id, pts:0, wins:0, pods:0, poles:0, fl:0, starts:0, best:99, finishes:[] });
   D.teams.forEach(t => ts[t.id] = { id:t.id, pts:0, wins:0, pods:0, best:99 });
-  [...D.results].sort((a,b)=>a.round-b.round).forEach(r => {
+  [...D.results].filter(r => r.round <= upTo).sort((a,b)=>a.round-b.round).forEach(r => {
     let pos = 0;
     r.entries.forEach(e => {
       const s = ds[e.d] || (ds[e.d] = { id:e.d, pts:0, wins:0, pods:0, poles:0, fl:0, starts:0, best:99, finishes:[] });
@@ -183,7 +183,7 @@ function driverTable(S, limit){
     ${rows.map((s,i) => { const d = driver(s.id), t = team(d.team); return `
       <tr class="${i===0?'top1':''}" style="--tc:${t.color};animation-delay:${i*35}ms">
         <td class="p">${i+1}</td>
-        <td class="who"><span class="tc-bar"></span><b>${esc(d.name)}</b> <small style="display:inline;margin-left:6px">#${esc(d.number)}</small><small>${esc(t.name)}</small></td>
+        <td class="who"><span class="tc-bar"></span><a href="#driver-${esc(d.id)}" class="dlink"><b>${esc(d.name)}</b></a> <small style="display:inline;margin-left:6px">#${esc(d.number)}</small><small>${esc(t.name)}</small></td>
         <td>${s.wins}</td><td>${s.pods}</td>
         <td class="gap">${i===0 ? 'Leader' : '-' + (lead - s.pts)}</td>
         <td class="num">${s.pts}</td></tr>`; }).join('')}
@@ -232,6 +232,50 @@ function countdownHTML(r){
   </div>`;
 }
 
+/* ---------- LIVE race-night mode ---------- */
+function liveState(){
+  const L = D.live || {}; if (L.mode === 'off') return null;
+  const now = Date.now(); let found = null;
+  for (const id of tierIds()) for (const r of D.tiers[id].calendar) {
+    if (!hasDate(r.date)) continue;
+    const t = new Date(r.date).getTime();
+    if (now >= t - 15*60e3 && now <= t + 150*60e3 && !D.tiers[id].results.some(x => x.round === r.round)) found = { race:r, tierId:id };
+  }
+  if (L.mode === 'on') return found || { race: nextRace() || null, tierId: tier };
+  return found;
+}
+function streamEmbed(url){
+  if (!url) return '';
+  let m;
+  if ((m = url.match(/twitch\.tv\/(?:videos\/)?([A-Za-z0-9_]+)/))) return `https://player.twitch.tv/?channel=${m[1]}&parent=${location.hostname}&muted=true`;
+  if ((m = url.match(/(?:v=|youtu\.be\/|\/live\/|\/embed\/)([A-Za-z0-9_-]{11})/))) return `https://www.youtube.com/embed/${m[1]}?autoplay=1&mute=1`;
+  if ((m = url.match(/youtube\.com\/channel\/(UC[A-Za-z0-9_-]+)/))) return `https://www.youtube.com/embed/live_stream?channel=${m[1]}&autoplay=1&mute=1`;
+  return '';
+}
+function liveHTML(L){
+  const r = L.race, url = (D.live || {}).url || '', em = streamEmbed(url);
+  return `<section class="live-zone">
+    <div class="live-top"><span class="live-dot"></span><b>LIVE NOW</b><span>${r ? `${esc(tierName(L.tierId))} · Round ${r.round} · ${flag(r.country)} ${esc(r.name)}` : 'Race night'}</span></div>
+    <div class="live-grid">
+      <div class="live-player">${em ? `<iframe src="${esc(em)}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen title="PRL live stream"></iframe>`
+        : `<div class="live-noplayer">${carSide('#ff6a00', 1)}<p>${url ? 'Stream is on another site' : 'Stream link coming soon'}</p></div>`}</div>
+      <div class="live-side">
+        ${r && r.image ? `<div class="live-track">${trackImg(r.image, 'sc-track', r.track)}</div>` : ''}
+        <h2>${r ? esc(r.name) : 'Race night'}</h2>
+        <p>${r ? esc(r.track) + (hasDate(r.date) ? ' · Lights out ' + fmtTime(r.date) : '') : ''}</p>
+        ${(D.live||{}).note ? `<p class="live-note">${esc(D.live.note)}</p>` : ''}
+        ${url ? `<a class="btn" href="${esc(url)}" target="_blank" rel="noopener"><span>▶ Open stream</span></a>` : ''}
+        <a class="btn ghost" href="#results"><span>Results</span></a>
+      </div>
+    </div>
+  </section>`;
+}
+function syncLive(){
+  const L = D && liveState(), b = document.getElementById('liveBadge');
+  document.body.classList.toggle('is-live', !!L); if (b) b.hidden = !L;
+  return !!L;
+}
+
 /* ---------- pages ---------- */
 const pages = {};
 
@@ -278,7 +322,8 @@ pages.home = () => {
     </a>`;
   }
 
-  return `
+  const L = liveState();
+  return `${L ? liveHTML(L) : ''}
   <section class="hero" id="hero">
     <canvas class="hero-canvas"></canvas>
     <div class="hero-bg"></div>
@@ -304,6 +349,16 @@ pages.home = () => {
     <div><b data-count="${D.drivers.length}">0</b><span>DRIVERS</span></div>
     <div><b data-count="${D.teams.length}">0</b><span>TEAMS</span></div>
     <div><b data-count="${leader ? leader.pts : 0}">0</b><span>LEADER PTS</span></div>
+  </div>
+  <h2 class="section-title">The PRL Garage</h2>
+  <div class="garage reveal" id="garage">
+    <canvas></canvas>
+    <div class="garage-ui">
+      <div><small>LIVERY</small><b class="garage-name">PRL Orange</b></div>
+      <div class="swatches">${[['#ff6a00','PRL Orange'], ...D.teams.map(t => [t.color, t.name])].map(([c,n],i) => `<button data-livery="${esc(c)}" title="${esc(n)}" style="--c:${esc(c)}" class="${i?'':'on'}"></button>`).join('')}</div>
+    </div>
+    <div class="garage-hint">⟲ Drag to spin</div>
+    <div class="garage-fallback">${carSide('#ff6a00', 1)}</div>
   </div>
   <h2 class="section-title">Season Progress <a href="#calendar">CALENDAR →</a></h2>
   ${!total ? `<div class="empty">The ${esc(tierName())} calendar hasn't been announced yet.</div>` : ''}
@@ -350,6 +405,12 @@ function homeFX(){
     hero.style.setProperty('--my', ((e.clientY - r.top) / r.height - .5).toFixed(3));
   });
 }
+function mountGarage(){
+  const g = document.getElementById('garage'); if (!g || !window.PRLGarage) return;
+  const io2 = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io2.disconnect();
+    PRLGarage.mount(g, ['#ff6a00']); } }, { rootMargin: '200px' });
+  io2.observe(g);
+}
 function countUps(){
   app.querySelectorAll('[data-count]').forEach(el => {
     const to = +el.dataset.count, t0 = performance.now(), dur = 1300;
@@ -366,8 +427,37 @@ pages.standings = () => {
       <button class="${view==='drivers'?'on':''}" data-v="drivers"><span>Drivers</span></button>
       <button class="${view==='teams'?'on':''}" data-v="teams"><span>Constructors</span></button>
     </div>
-    ${view === 'drivers' ? driverTable(S) : teamTable(S)}`;
+    ${view === 'drivers' ? driverTable(S) + bumpChart() : teamTable(S)}`;
 };
+
+/* championship position after every round — animated bump chart */
+function bumpChart(){
+  const done = byRound().filter(r => resultFor(r.round));
+  if (!done.length || !D.drivers.length) return '';
+  const snaps = done.map(r => compute(r.round).drivers.map(x => x.id));
+  const n = D.drivers.length, W = 900, H = Math.max(260, n * 26 + 40), L = 54, R = 120, T = 20, B = 30;
+  const X = i => done.length > 1 ? L + i * (W - L - R) / (done.length - 1) : L + (W - L - R) / 2;
+  const Y = p => T + (p - 1) * (H - T - B) / Math.max(1, n - 1);
+  const seen = {};
+  const lines = D.drivers.map(d => {
+    const t = team(d.team); const mate = seen[d.team]; seen[d.team] = true;
+    const pts = snaps.map((ids, i) => { const p = ids.indexOf(d.id) + 1; return p ? [X(i), Y(p)] : null; }).filter(Boolean);
+    if (!pts.length) return '';
+    const path = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
+    const last = pts[pts.length - 1];
+    const code = d.name.replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase();
+    return `<g class="bl" data-bd="${esc(d.id)}" style="--c:${t.color}">
+      <path d="${path}" pathLength="1" class="${mate ? 'mate' : ''}"/>
+      ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="5"/>`).join('')}
+      <text x="${last[0] + 14}" y="${last[1] + 4}">${esc(code)}</text></g>`;
+  }).join('');
+  return `<h2 class="section-title">Championship Battle</h2>
+  <div class="panel bump-wrap reveal"><svg class="bump" viewBox="0 0 ${W} ${H}">
+    ${done.map((r, i) => `<line x1="${X(i)}" x2="${X(i)}" y1="${T - 8}" y2="${H - B + 6}" class="bg"/><text x="${X(i)}" y="${H - 6}" class="bx">R${r.round}</text>`).join('')}
+    ${Array.from({ length: n }, (_, i) => `<text x="${L - 16}" y="${Y(i + 1) + 4}" class="by">P${i + 1}</text>`).join('')}
+    ${lines}
+  </svg><p class="sub" style="margin-top:8px">Championship position after each round. Hover or tap a line to follow a driver.</p></div>`;
+}
 
 pages.transfers = () => {
   const list = [...D.transfers].sort((a,b) => (b.date||'').localeCompare(a.date||''));
@@ -406,12 +496,52 @@ pages.teams = () => {
       </div>`; }).join('')}</div>`;
 };
 
+function h2hHTML(S){
+  if (D.drivers.length < 2) return '';
+  let [a, b] = pages.drivers.h2h || [];
+  if (!D.drivers.some(x => x.id === a)) a = S.drivers[0].id;
+  if (!D.drivers.some(x => x.id === b) || b === a) b = S.drivers.find(x => x.id !== a).id;
+  pages.drivers.h2h = [a, b];
+  const da = driver(a), db = driver(b), ta = team(da.team), tb = team(db.team);
+  const sa = S.d[a], sb = S.d[b];
+  const fin = id => D.results.map(r => classify(r).find(e => e.d === id)).filter(Boolean);
+  const avg = id => { const f = fin(id).filter(e => e.pos !== 'DNF').map(e => e.pos); return f.length ? f.reduce((x,y)=>x+y,0)/f.length : null; };
+  let ra = 0, rb = 0;
+  D.results.forEach(r => { const cl = classify(r), ea = cl.find(e => e.d === a), eb = cl.find(e => e.d === b);
+    if (!ea || !eb) return; const pa = ea.pos === 'DNF' ? 999 : ea.pos, pb = eb.pos === 'DNF' ? 999 : eb.pos;
+    if (pa < pb) ra++; else if (pb < pa) rb++; });
+  const rows = [
+    ['Race head-to-head', ra, rb], ['Points', sa.pts, sb.pts], ['Wins', sa.wins, sb.wins], ['Podiums', sa.pods, sb.pods],
+    ['Poles', sa.poles, sb.poles], ['Fastest laps', sa.fl, sb.fl],
+    ['Best finish', sa.best < 99 ? sa.best : null, sb.best < 99 ? sb.best : null, true, 'P'],
+    ['Average finish', avg(a), avg(b), true, 'P']
+  ];
+  const opts = sel => D.drivers.map(d => `<option value="${d.id}" ${d.id === sel ? 'selected' : ''}>${esc(d.name)}</option>`).join('');
+  return `<h2 class="section-title" id="h2h">Head to Head</h2>
+  <div class="h2h reveal" style="--ca:${ta.color};--cb:${tb.color}">
+    <div class="h2h-top">
+      <div class="h2h-side"><select data-h2hsel="0">${opts(a)}</select><div class="h2h-car a moving">${carSide(ta.color, da.number)}</div><b>${esc(da.name)}</b><span>${esc(ta.name)}</span></div>
+      <div class="h2h-vs">VS</div>
+      <div class="h2h-side b"><select data-h2hsel="1">${opts(b)}</select><div class="h2h-car b moving">${carSide(tb.color, db.number)}</div><b>${esc(db.name)}</b><span>${esc(tb.name)}</span></div>
+    </div>
+    ${rows.map(([lbl, x, y, low, pre]) => {
+      const fx = x === null ? '—' : (pre || '') + (Number.isInteger(x) ? x : x.toFixed(1));
+      const fy = y === null ? '—' : (pre || '') + (Number.isInteger(y) ? y : y.toFixed(1));
+      let wa = 50; if (x !== null && y !== null && (x + y) > 0) wa = low ? (y / (x + y)) * 100 : (x / (x + y)) * 100;
+      if (x !== null && y === null) wa = 100; if (x === null && y !== null) wa = 0;
+      const lead = wa > 50 ? 'a' : wa < 50 ? 'b' : '';
+      return `<div class="h2h-row ${lead}"><span class="va">${fx}</span><div class="h2h-bar"><i style="width:${wa}%"></i><em>${lbl}</em></div><span class="vb">${fy}</span></div>`;
+    }).join('')}
+  </div>`;
+}
+
 pages.drivers = () => {
   const S = compute();
   return head('The Grid', 'Dri<span>vers</span>', String(D.drivers.length).padStart(2,'0')) +
+    (D.drivers.length > 1 ? `<div class="actions" style="margin-bottom:18px"><a href="#drivers" class="btn sm ghost" data-goh2h><span>⚔ Head to head</span></a></div>` : '') +
     (!D.drivers.length ? `<div class="empty">No ${esc(tierName())} drivers signed yet.</div>` : '') +
     `<div class="grid g4">${S.drivers.map((s,i) => { const d = driver(s.id), t = team(d.team);
-      return `<div class="card drv reveal tilt" style="--tc:${t.color}">
+      return `<a href="#driver-${esc(d.id)}" class="card drv reveal tilt" style="--tc:${t.color}">
         <div class="big">${esc(d.number)}</div>
         <div class="drv-car">${carSide(t.color, d.number)}</div>
         <div class="flag">${flag(d.country)} ${esc(d.country || '')} · P${i+1}</div>
@@ -423,7 +553,7 @@ pages.drivers = () => {
           <div>${s.pods}<small>PODS</small></div>
           <div>${s.poles}<small>POLES</small></div>
         </div>
-      </div>`; }).join('')}</div>`;
+      </a>`; }).join('')}</div>` + h2hHTML(S);
 };
 
 const RAW = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/`;
@@ -487,6 +617,97 @@ pages.calendar = () => {
       </${res ? 'a' : 'div'}>`; }).join('')}</div>`;
 };
 
+pages.driver = (id) => {
+  const d = D.drivers.find(x => x.id === id);
+  if (!d) return head('Driver', 'Not <span>found</span>', '?') + `<div class="empty">That driver isn't in ${esc(tierName())}. <a href="#drivers" style="color:var(--or)">Back to drivers</a></div>`;
+  const S = compute(), st = S.d[d.id] || { pts:0, wins:0, pods:0, poles:0, fl:0, starts:0, best:99, finishes:[] };
+  const pos = S.drivers.findIndex(x => x.id === d.id) + 1, t = team(d.team);
+  const rounds = byRound().filter(r => resultFor(r.round));
+  const rows = rounds.map(r => { const c = classify(resultFor(r.round)).find(e => e.d === d.id); return { r, c }; });
+  const fin = rows.filter(x => x.c && x.c.pos !== 'DNF').map(x => x.c.pos);
+  const avg = fin.length ? (fin.reduce((a,b)=>a+b,0) / fin.length).toFixed(1) : '—';
+  const mate = D.drivers.find(x => x.team === d.team && x.id !== d.id);
+  // form chart
+  const n = Math.max(1, D.drivers.length), W = 640, H = 220, pad = 30;
+  const pts = rows.map((x,i) => { const p = x.c ? (x.c.pos === 'DNF' ? n : x.c.pos) : null;
+    return p === null ? null : { x: pad + (rows.length > 1 ? i * (W - 2*pad) / (rows.length - 1) : (W-2*pad)/2), y: pad + (p - 1) * (H - 2*pad) / Math.max(1, n - 1), p: x.c.pos, r: x.r.round }; });
+  const line = pts.filter(Boolean).map((p,i) => (i ? 'L' : 'M') + p.x.toFixed(1) + ' ' + p.y.toFixed(1)).join(' ');
+  const chart = rows.length ? `<svg class="form-chart" viewBox="0 0 ${W} ${H + 20}">
+      ${[1, Math.ceil(n/2), n].map(p => `<line x1="${pad}" x2="${W-pad}" y1="${pad + (p-1)*(H-2*pad)/Math.max(1,n-1)}" y2="${pad + (p-1)*(H-2*pad)/Math.max(1,n-1)}" class="fc-grid"/><text x="4" y="${pad + (p-1)*(H-2*pad)/Math.max(1,n-1) + 4}" class="fc-lbl">P${p}</text>`).join('')}
+      <path d="${line}" class="fc-line" style="stroke:${t.color}" pathLength="1"/>
+      ${pts.map(p => p ? `<g class="fc-pt"><circle cx="${p.x}" cy="${p.y}" r="${p.p===1?9:6}" fill="${p.p==='DNF'?'#ff3b3b':p.p<=3?'#ff6a00':'#fff'}" stroke="#0a0a0a" stroke-width="3"/><text x="${p.x}" y="${H+12}" class="fc-lbl" text-anchor="middle">R${p.r}</text></g>` : '').join('')}
+    </svg>` : `<div class="empty">No races yet — the form guide fills in after round 1.</div>`;
+  return `<section class="profile" style="--tc:${t.color}">
+      <div class="pf-bg"><span>${esc(d.number)}</span></div>
+      <div class="pf-left">
+        <a href="#drivers" class="pf-back">← Drivers</a>
+        <div class="kicker"><span class="kt">${esc(tierName())}</span>${flag(d.country)} ${esc(d.country || '')} · #${esc(d.number)}</div>
+        <h1>${esc(d.name)}</h1>
+        <div class="pf-team"><i></i>${esc(t.name)}</div>
+        ${d.bio ? `<p class="sub">${esc(d.bio)}</p>` : ''}
+        <div class="pf-stats">
+          <div><b>${pos ? 'P' + pos : '—'}</b><span>CHAMPIONSHIP</span></div>
+          <div><b data-count="${st.pts}">0</b><span>POINTS</span></div>
+          <div><b data-count="${st.wins}">0</b><span>WINS</span></div>
+          <div><b data-count="${st.pods}">0</b><span>PODIUMS</span></div>
+          <div><b data-count="${st.poles}">0</b><span>POLES</span></div>
+          <div><b data-count="${st.fl}">0</b><span>FASTEST LAPS</span></div>
+          <div><b>${st.best < 99 ? 'P' + st.best : '—'}</b><span>BEST FINISH</span></div>
+          <div><b>${avg}</b><span>AVG FINISH</span></div>
+        </div>
+      </div>
+      <div class="pf-right">
+        ${d.photo ? `<div class="pf-photo">${trackImg(d.photo, '', d.name)}</div>` : ''}
+        <div class="pf-car moving">${carSide(t.color, d.number)}</div>
+      </div>
+    </section>
+    <h2 class="section-title">Form Guide</h2>
+    <div class="panel reveal">${chart}</div>
+    <h2 class="section-title">Race by Race</h2>
+    <div class="grid g4">${rows.map(({r, c}) => `<a href="#results" data-round="${r.round}" class="card pf-race reveal ${c && c.pos===1 ? 'won' : ''}">
+        <small>R${r.round} ${flag(r.country)}</small><b>${c ? (c.pos === 'DNF' ? 'DNF' : 'P' + c.pos) : '—'}</b><span>${esc(r.name)}</span><em>${c && c.pts ? '+' + c.pts + ' pts' : ''}</em></a>`).join('') || '<div class="empty">No races yet.</div>'}</div>
+    ${mate ? `<div class="actions" style="margin-top:28px"><a class="btn ghost" href="#drivers" data-h2h="${d.id}:${mate.id}"><span>⚔ Head to head vs teammate ${esc(mate.name)}</span></a></div>` : ''}`;
+};
+
+const trophySVG = (c = '#ff6a00') => `<svg viewBox="0 0 120 150" class="trophy" aria-hidden="true">
+  <defs><linearGradient id="tg" x1="0" x2="1"><stop offset="0" stop-color="#8a5a1c"/><stop offset=".35" stop-color="#ffd27a"/><stop offset=".55" stop-color="#fff2c9"/><stop offset=".75" stop-color="#e9a93a"/><stop offset="1" stop-color="#7a4b12"/></linearGradient></defs>
+  <path d="M30 14 Q14 14 12 30 Q12 52 38 60" fill="none" stroke="url(#tg)" stroke-width="7"/><path d="M90 14 Q106 14 108 30 Q108 52 82 60" fill="none" stroke="url(#tg)" stroke-width="7"/>
+  <path d="M26 8 L94 8 L90 46 Q86 74 60 82 Q34 74 30 46 Z" fill="url(#tg)"/>
+  <rect x="54" y="82" width="12" height="22" fill="url(#tg)"/><path d="M40 104 L80 104 L86 118 L34 118 Z" fill="url(#tg)"/>
+  <rect x="28" y="118" width="64" height="24" rx="2" fill="#151515" stroke="${c}" stroke-width="2"/>
+  <text x="60" y="135" text-anchor="middle" font-family="Arial Black,Arial" font-size="11" fill="${c}">PRL</text>
+  <path d="M40 16 L46 16 L44 44 Q44 56 52 66 Q38 58 38 44 Z" fill="#fff" opacity=".45"/></svg>`;
+function withTier(id, fn){ const old = tier; tier = id; try { return fn(); } finally { tier = old; } }
+
+pages.hall = () => {
+  const champs = [...D.hall].sort((a,b) => (b.season||'').localeCompare(a.season||'', undefined, { numeric:true }));
+  const recs = [];
+  tierIds().forEach(id => withTier(id, () => {
+    if (!D.results.length) return;
+    const S = compute(); const best = (k, lbl, unit) => { const top = [...S.drivers].sort((a,b) => b[k] - a[k])[0];
+      if (top && top[k] > 0) { const d = driver(top.id); recs.push({ lbl, val: top[k], unit, who: d.name, id: d.id, team: team(d.team), tier: tierName(id) }); } };
+    best('pts', 'Most points', 'pts'); best('wins', 'Most wins', 'wins'); best('pods', 'Most podiums', 'podiums');
+    best('poles', 'Most poles', 'poles'); best('fl', 'Most fastest laps', 'fastest laps');
+    let big = null; D.results.forEach(r => { const cl = classify(r); const w = cl[0]; if (w && w.gap && /^\+?\d/.test(cl[1]?.gap || '')) { const g = parseFloat((cl[1].gap||'').replace('+','')); if (!isNaN(g) && (!big || g > big.g)) big = { g, d: w.d, r: r.round }; } });
+    if (big) { const d = driver(big.d); recs.push({ lbl:'Biggest winning margin', val:'+' + big.g.toFixed(3), unit:'sec (R' + big.r + ')', who:d.name, id:d.id, team:team(d.team), tier:tierName(id) }); }
+  }));
+  return head('Legends', 'Hall of <span>Fame</span>', 'HOF', 'Champions, records and the drivers who made history in the PRL.') + `
+    <h2 class="section-title">Trophy Cabinet</h2>
+    ${champs.length ? `<div class="grid g3 cabinet">${champs.map(h => `<div class="card champ reveal tilt">
+        <div class="champ-trophy">${trophySVG()}</div>
+        <small>${esc(h.season || '')}${h.tier ? ' · ' + esc(h.tier) : ''}</small>
+        <h3>${esc(h.champion || 'TBD')}</h3>
+        <div class="champ-team">${esc(h.team || '')}</div>
+        ${h.constructor ? `<div class="champ-con">🏁 Constructors: <b>${esc(h.constructor)}</b></div>` : ''}
+        ${h.note ? `<p>${esc(h.note)}</p>` : ''}
+      </div>`).join('')}</div>`
+    : `<div class="cabinet-empty reveal">${trophySVG()}${trophySVG('#fff')}${trophySVG()}<p>The cabinet is waiting for its first champion.</p></div>`}
+    <h2 class="section-title">This Season's Records</h2>
+    ${recs.length ? `<div class="grid g3">${recs.map(x => `<a href="#driver-${esc(x.id)}" class="card rec reveal tilt" style="--tc:${x.team.color}">
+        <small><span class="kt">${esc(x.tier)}</span>${esc(x.lbl)}</small><b>${esc(x.val)}</b><em>${esc(x.unit)}</em><span>${esc(x.who)} · ${esc(x.team.name)}</span></a>`).join('')}</div>`
+    : `<div class="empty">Records appear once races have been run.</div>`}`;
+};
+
 pages.results = () => {
   const done = byRound().filter(r => resultFor(r.round));
   let sel = pages.results.round;
@@ -499,20 +720,28 @@ pages.results = () => {
   const res = resultFor(sel); const cl = classify(res);
   return head('Race Results', 'Res<span>ults</span>', 'R' + sel) + pills + `
     <div class="res-head">
-      <div><div style="color:var(--or);font-weight:700;letter-spacing:.25em;font-size:12px">ROUND ${sel}</div><h2>${flag(r.country)} ${esc(r.name)}</h2><div style="color:var(--mut)">${esc(r.track)} · ${fmtDate(r.date)}</div></div>
+      <div><div style="color:var(--or);font-weight:700;letter-spacing:.25em;font-size:12px">ROUND ${sel}</div><h2>${flag(r.country)} ${esc(r.name)}</h2><div style="color:var(--mut)">${esc(r.track)}${hasDate(r.date) ? ' · ' + fmtDate(r.date) : ''}</div></div>
       <div class="badges">
         ${res.pole ? `<div class="badge"><b>POLE</b>${esc(driver(res.pole).name)}</div>` : ''}
         ${res.fl ? `<div class="badge"><b>FASTEST LAP</b>${esc(driver(res.fl).name)}</div>` : ''}
       </div>
     </div>
-    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Pos</th><th>Driver</th><th>Team</th><th class="num">Pts</th></tr></thead><tbody>
-      ${cl.map((e,i) => { const d = driver(e.d), t = team(e.t); return `
-        <tr class="${e.pos===1?'top1':''}" style="--tc:${t.color};animation-delay:${i*30}ms">
-          <td class="p" ${e.pos==='DNF'?'style="font-size:14px;color:#ff6b6b"':''}>${e.pos}</td>
-          <td class="who"><span class="tc-bar"></span><b>${esc(d.name)}</b>${res.fl===e.d?' <small style="display:inline;color:#b26bff">◆ FL</small>':''}</td>
-          <td style="color:var(--mut)">${esc(t.name)}</td>
-          <td class="num">${e.pts || ''}</td></tr>`; }).join('')}
-    </tbody></table></div>
+    <div class="tower">
+      <div class="tower-head"><span class="th-logo">PRL</span><span>${esc(r.name)}</span><span class="th-flag">🏁 FINAL</span></div>
+      ${cl.map((e,i) => { const d = driver(e.d), t = team(e.t);
+        const ch = (e.grid && e.pos !== 'DNF') ? (+e.grid - e.pos) : null;
+        const code = (d.name || '???').replace(/[^A-Za-z]/g,'').slice(0,3).toUpperCase();
+        return `<a href="#driver-${esc(e.d)}" class="trow ${e.pos===1?'win':''} ${e.pos==='DNF'?'out':''}" style="--tc:${t.color};--i:${i}">
+          <span class="tpos">${e.pos}</span>
+          <span class="tbar"></span>
+          <span class="tcode">${esc(code)}</span>
+          <span class="tname">${esc(d.name)}<small>${esc(t.name)}</small></span>
+          <span class="tchg ${ch>0?'up':ch<0?'dn':''}">${ch===null?'':ch>0?'▲'+ch:ch<0?'▼'+(-ch):'—'}</span>
+          ${res.fl===e.d ? '<span class="tfl" title="Fastest lap">FL</span>' : '<span></span>'}
+          <span class="tgap">${e.pos==='DNF' ? 'DNF' : esc(e.gap || (e.pos===1 ? 'WINNER' : ''))}</span>
+          <span class="tpts">${e.pts ? '+' + e.pts : ''}</span>
+        </a>`; }).join('')}
+    </div>
     ${res.notes ? `<p class="sub" style="margin-top:16px">${esc(res.notes)}</p>` : ''}`;
 };
 
@@ -534,7 +763,7 @@ pages.admin = () => {
     </div>`;
   if (!getToken()) return head('Race Control', 'Ad<span>min</span>', 'RC') + connectView(true);
   const tab = pages.admin.tab || 'results';
-  const tabs = ['results','drivers','teams','calendar','news','transfers','settings'];
+  const tabs = ['results','drivers','teams','calendar','news','transfers','hall','settings'];
   const [st, txt] = setSync.last || ['ok', '✓ Connected — changes go live automatically'];
   return head('Race Control', 'Ad<span>min</span>', 'RC') + `
     <div class="admin-meta"><div id="syncState" class="sync ${st}">${txt}</div>
@@ -570,7 +799,7 @@ const driverOpts = (sel, blank) => (blank ? `<option value="">${blank}</option>`
 const CRUD = {
   drivers: { title:'Driver', id:'d', list:()=>[...D.drivers].sort((a,b)=>a.number-b.number),
     label:x=>`#${esc(x.number)} ${esc(x.name)}`, sub:x=>team(x.team).name,
-    fields:[{k:'name',l:'Name / Gamertag'},{k:'number',l:'Number',t:'number'},{k:'team',l:'Team',t:'team'},{k:'country',l:'Country code (e.g. GB)'}] },
+    fields:[{k:'name',l:'Name / Gamertag'},{k:'number',l:'Number',t:'number'},{k:'team',l:'Team',t:'team'},{k:'country',l:'Country code (e.g. GB)'},{k:'photo',l:'Photo / helmet (optional)',t:'image',dir:'drivers'},{k:'bio',l:'Short bio (optional)',t:'textarea'}] },
   teams: { title:'Team', id:'t', list:()=>D.teams,
     label:x=>esc(x.name), sub:x=>`${x.base||''} ${x.principal?'· TP: '+x.principal:''}`,
     fields:[{k:'name',l:'Team name'},{k:'color',l:'Colour',t:'color'},{k:'base',l:'Base'},{k:'principal',l:'Team principal'}] },
@@ -580,6 +809,9 @@ const CRUD = {
   news: { title:'Article', id:'n', list:()=>[...D.news].sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     label:x=>esc(x.title), sub:x=>`${x.tag||''} · ${fmtDate(x.date)}`,
     fields:[{k:'title',l:'Headline'},{k:'tag',l:'Tag (e.g. Race Report)'},{k:'date',l:'Date',t:'date'},{k:'body',l:'Article',t:'textarea'}] },
+  hall: { title:'Champion', id:'h', list:()=>[...D.hall].sort((a,b)=>(b.season||'').localeCompare(a.season||'')),
+    label:x=>`🏆 ${esc(x.season)} — ${esc(x.champion)}`, sub:x=>`${x.tier||''} ${x.constructor ? '· Constructors: ' + x.constructor : ''}`,
+    fields:[{k:'season',l:'Season (e.g. Season 1)'},{k:'tier',l:'Tier (e.g. Tier 1)'},{k:'champion',l:'Drivers champion'},{k:'team',l:'Their team'},{k:'constructor',l:'Constructors champion'},{k:'note',l:'Note (optional)',t:'textarea'}] },
   transfers: { title:'Transfer', id:'x', list:()=>[...D.transfers].sort((a,b)=>(b.date||'').localeCompare(a.date||'')),
     label:x=>`${esc(x.driver)} — ${x.from?esc(team(x.from).name):'Free Agent'} → ${x.to?esc(team(x.to).name):'Released'}`, sub:x=>`${x.type||'Transfer'} · ${fmtDate(x.date)}`,
     fields:[{k:'driver',l:'Driver',t:'driverText'},{k:'from',l:'From',t:'teamOpt'},{k:'to',l:'To',t:'teamOpt'},
@@ -597,9 +829,9 @@ function crudView(key){
       case 'textarea': return `<textarea name="${f.k}">${esc(v)}</textarea>`;
       case 'driverText': return `<input type="text" name="${f.k}" list="dl-drivers" value="${esc(v)}"><datalist id="dl-drivers">${D.drivers.map(d=>`<option value="${esc(d.name)}">`).join('')}</datalist>`;
       case 'tier': return `<select name="${f.k}">${tierIds().map(id => `<option value="${id}" ${id===(v||tier)?'selected':''}>${esc(tierName(id))}</option>`).join('')}</select>`;
-      case 'image': return `<input type="hidden" name="image" value="${esc(v)}">
-        ${v ? `<div class="img-prev">${trackImg(v, '', 'Current track image')}<label class="chk"><input type="checkbox" name="_rmimg"> Remove</label></div>` : ''}
-        <input type="file" name="_imgfile" accept="image/*" class="file-in">`;
+      case 'image': return `<input type="hidden" name="${f.k}" value="${esc(v)}">
+        ${v ? `<div class="img-prev">${trackImg(v, '', 'Current image')}<label class="chk"><input type="checkbox" name="_rm_${f.k}"> Remove</label></div>` : ''}
+        <input type="file" name="_file_${f.k}" accept="image/*" class="file-in">`;
       case 'color': return `<input type="color" name="${f.k}" value="${esc(v||'#ff6a00')}">`;
       default: return `<input type="${f.t||'text'}" name="${f.k}" value="${esc(v)}">`;
     }
@@ -638,11 +870,12 @@ function resultsView(){
       <label class="field">Pole position<select id="resPole">${driverOpts(resDraft.pole,'—')}</select></label>
       <label class="field">Fastest lap<select id="resFl">${driverOpts(resDraft.fl,'—')}</select></label>
     </div>
-    <p class="sub" style="margin:0 0 12px">Put drivers in finishing order with the arrows. Tick DNF for retirements; untick "Raced" for drivers who didn't take part.</p>
+    <p class="sub" style="margin:0 0 12px">Put drivers in finishing order with the arrows. Optional: grid slot and gap (e.g. 1:32:10.4 for the winner, +3.214 or +1 LAP for others) — these power the TV timing tower. Tick DNF for retirements; ✕ removes drivers who didn't race.</p>
     <div class="order-list">${resDraft.entries.map((e,i) => { const t = team(e.t); const lbl = e.dnf ? 'DNF' : 'P' + (++p); return `
       <div class="order-item ${e.dnf?'dnf':''}" style="--tc:${t.color}">
         <span class="pnum">${lbl}</span>
         <span><b>${esc(driver(e.d).name)}</b> <small style="color:var(--mut)">${esc(t.name)}</small></span>
+        <span class="rx"><input type="number" min="1" placeholder="Grid" title="Starting position" data-grid="${i}" value="${esc(e.grid||'')}"><input type="text" placeholder="${p===1&&!e.dnf?'Time':'+Gap'}" title="Race time / gap (optional)" data-gap="${i}" value="${esc(e.gap||'')}"></span>
         <label class="chk"><input type="checkbox" data-dnf="${i}" ${e.dnf?'checked':''}>DNF</label>
         <span style="display:flex;gap:4px"><button class="mini" data-mv="${i}:-1">▲</button><button class="mini" data-mv="${i}:1">▼</button></span>
         <button class="mini del" data-rm="${i}" title="Didn't race">✕</button>
@@ -658,7 +891,19 @@ function resultsView(){
 
 function settingsView(){
   const out = JSON.stringify(D, null, 2);
+  const Lv = D.live || {};
   return connectView(false) + `
+  <div class="panel">
+    <h3>🔴 Race night (LIVE mode)</h3>
+    <p class="sub" style="margin:0 0 14px">On <b>Auto</b> the site goes LIVE from 15 min before a race until 2½ hours after (or until its result is saved), then switches back by itself. Paste a Twitch channel or YouTube live link to embed the stream.</p>
+    <div class="form-grid">
+      <label class="field">Mode<select id="lvMode">${[['auto','Auto (by race time)'],['on','Force LIVE now'],['off','Off']].map(([v,l]) => `<option value="${v}" ${(Lv.mode||'auto')===v?'selected':''}>${l}</option>`).join('')}</select></label>
+      <label class="field" style="grid-column:span 2">Stream link<input type="text" id="lvUrl" placeholder="https://twitch.tv/yourchannel or YouTube link" value="${esc(Lv.url||'')}"></label>
+      <label class="field" style="grid-column:span 2">Message (optional)<input type="text" id="lvNote" placeholder="e.g. Commentary by …" value="${esc(Lv.note||'')}"></label>
+    </div>
+    <div class="actions"><button class="btn sm" data-savelive><span>Save live settings</span></button></div>
+  </div>`
+  + `
   <div class="panel">
     <h3>League settings</h3>
     <div class="form-grid">
@@ -684,7 +929,7 @@ function settingsView(){
 const adminTabs = {
   results: resultsView,
   drivers: () => crudView('drivers'), teams: () => crudView('teams'), calendar: () => crudView('calendar'),
-  news: () => crudView('news'), transfers: () => crudView('transfers'), settings: settingsView
+  news: () => crudView('news'), transfers: () => crudView('transfers'), hall: () => crudView('hall'), settings: settingsView
 };
 const rerenderAdmin = () => { const b = document.getElementById('adminBody'); if (b) { render(true); } };
 
@@ -706,7 +951,7 @@ function switchTier(id){
   if (id === tier || tierBusy || !D.tiers[id]) return;
   tierBusy = true; tier = id; try { localStorage.setItem('prl_tier', id); } catch(_){}
   resDraft = null; Object.keys(editing).forEach(k => editing[k] = null); adminTabs.round = undefined; pages.results.round = null;
-  syncTierUI();
+  syncTierUI(); syncLive();
   const fx = document.getElementById('tierfx');
   fx.querySelector('b').textContent = tierName(id);
   fx.dataset.n = (tierIds().indexOf(id) + 1);
@@ -717,23 +962,25 @@ function switchTier(id){
 addEventListener('resize', () => syncTierUI());
 
 /* ---------- router & render ---------- */
-const ROUTES = ['home','standings','transfers','news','teams','drivers','calendar','results','admin'];
+const ROUTES = ['home','standings','transfers','news','teams','drivers','calendar','results','hall','admin'];
 let current = null, first = true;
-function route(){ const h = location.hash.slice(1); return ROUTES.includes(h) ? h : 'home'; }
+function route(){ const h = location.hash.slice(1); if (/^driver-/.test(h)) return 'driver'; return ROUTES.includes(h) ? h : 'home'; }
 
 function render(keepScroll){
   const r = route();
   const y = window.scrollY;
   current = r;
-  app.innerHTML = `<div class="page">${pages[r]()}</div>`;
+  app.innerHTML = `<div class="page">${r === 'driver' ? pages.driver(location.hash.slice(8)) : pages[r]()}</div>`;
   syncTierUI();
   document.title = (r === 'home' ? '' : r.charAt(0).toUpperCase() + r.slice(1) + ' · ') + 'PRL — Pinnacle Racing League';
-  document.querySelectorAll('#desknav a, .menu-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + r));
+  document.querySelectorAll('#desknav a, .menu-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (r === 'driver' ? 'drivers' : r)));
   moveInk();
   if (keepScroll) { window.scrollTo(0, y); app.querySelector('.page').style.animation = 'none'; }
   else window.scrollTo(0, 0);
   observe(); tick();
-  if (r === 'home') { homeFX(); countUps(); }
+  if (r === 'home') { homeFX(); countUps(); mountGarage(); }
+  if (r === 'driver') countUps();
+  if (r === 'drivers' && pages.drivers.jump) { pages.drivers.jump = false; setTimeout(() => document.getElementById('h2h')?.scrollIntoView({ behavior:'smooth' }), 400); }
 }
 
 function go(){
@@ -806,10 +1053,13 @@ if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
 
 /* ---------- events ---------- */
 app.addEventListener('click', async e => {
-  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay], [data-focus]');
+  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay], [data-focus], [data-h2h], [data-goh2h], [data-bd]');
   if (!t) return;
   if (t.dataset.toggle !== undefined) { t.classList.toggle('open'); return; }
   if (t.dataset.replay !== undefined) { intro(true); return; }
+  if (t.dataset.h2h) { pages.drivers.h2h = t.dataset.h2h.split(':'); pages.drivers.jump = true; return; }
+  if (t.dataset.goh2h !== undefined) { e.preventDefault(); document.getElementById('h2h')?.scrollIntoView({ behavior:'smooth' }); return; }
+  if (t.dataset.bd) { const svg = t.closest('svg'); const on = t.classList.contains('hl'); svg.querySelectorAll('.bl').forEach(g => g.classList.remove('hl')); svg.classList.toggle('focus', !on); if (!on) t.classList.add('hl'); return; }
   if (t.dataset.focus !== undefined) { pages.calendar.focus = t.dataset.focus ? +t.dataset.focus : null; render(true);
     document.getElementById('showcase')?.scrollIntoView({ behavior:'smooth', block:'start' }); return; }
   if (t.dataset.round) { pages.results.round = +t.dataset.round; return; }
@@ -846,6 +1096,10 @@ app.addEventListener('click', async e => {
       const o = JSON.parse(s); if (!(o.tiers || o.drivers) || !o.teams) throw 0; setData(o); resDraft = null; save('Restored backup'); render(true); }
     catch(_) { toast('Could not read that backup'); } return;
   }
+  if (t.dataset.savelive !== undefined) {
+    D.live = { mode: document.getElementById('lvMode').value, url: document.getElementById('lvUrl').value.trim(), note: document.getElementById('lvNote').value.trim() };
+    save('Live settings saved'); syncLive(); render(true); return;
+  }
   if (t.dataset.disconnect !== undefined) { try { localStorage.removeItem(TOKEN_KEY); } catch(_){} setSync.last = null; toast('Disconnected'); render(true); return; }
   if (t.dataset.savelg !== undefined) {
     D.league.name = document.getElementById('lgName').value.trim() || 'PRL';
@@ -862,8 +1116,14 @@ app.addEventListener('click', async e => {
   }
 });
 
+app.addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.gap !== undefined && resDraft) resDraft.entries[+t.dataset.gap].gap = t.value.trim();
+  if (t.dataset.grid !== undefined && resDraft) resDraft.entries[+t.dataset.grid].grid = t.value ? +t.value : '';
+});
 app.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset.h2hsel !== undefined) { pages.drivers.h2h[+t.dataset.h2hsel] = t.value; render(true); return; }
   if (t.id === 'resRound') { adminTabs.round = +t.value; resDraft = null; render(true); }
   if (t.dataset.dnf) { const i = +t.dataset.dnf; const a = resDraft.entries; a[i].dnf = t.checked;
     // move DNFs to the bottom
@@ -904,15 +1164,17 @@ app.addEventListener('submit', async e => {
     if (k === 'drivers' && !obj.name) return toast('Name required');
     if (k === 'teams' && !obj.name) return toast('Team name required');
     if (k === 'calendar' && !obj.name) return toast('Race name required');
-    if (k === 'calendar') {
-      if (fd.get('_rmimg')) obj.image = '';
-      const file = fd.get('_imgfile');
+    for (const fl of c.fields.filter(x => x.t === 'image')) {
+      if (fd.get('_rm_' + fl.k)) obj[fl.k] = '';
+      const file = fd.get('_file_' + fl.k);
       if (file && file.size) {
         const btn = f.querySelector('button.btn'); btn.disabled = true; btn.querySelector('span').textContent = 'Uploading image…';
-        try { obj.image = await uploadImage(file, `${tier}-r${obj.round}`); }
+        const base = k === 'calendar' ? `${tier}-r${obj.round}` : `${k}-${(obj.name || obj.champion || 'img').toLowerCase().replace(/[^a-z0-9]+/g,'-').slice(0,30)}`;
+        try { obj[fl.k] = await uploadImage(file, base, fl.dir || 'tracks'); }
         catch(err) { toast(err.message === 'auth' ? 'Connect GitHub in Settings first' : 'Image upload failed'); btn.disabled = false; btn.querySelector('span').textContent = 'Try again'; return; }
       }
     }
+    if (k === 'hall' && !obj.champion) return toast('Champion name required');
     if (k === 'news' && !obj.title) return toast('Headline required');
     if (k === 'transfers' && !obj.driver) return toast('Driver required');
     if (k === 'news' && !obj.date) obj.date = new Date().toISOString().slice(0,10);
@@ -942,6 +1204,8 @@ function setSeason(){ document.getElementById('season-label').textContent = D.le
   try { setData(await loadData()); }
   catch(e) { app.innerHTML = `<div class="empty" style="margin-top:60px">Couldn't load league data. Please refresh.</div>`; return; }
   setSeason(); go();
+  let wasLive = syncLive();
+  setInterval(() => { const now = syncLive(); if (now !== wasLive) { wasLive = now; if (current === 'home') render(true); } }, 30000);
   // keep visitors up to date: quietly refresh every 60s (not while an admin is editing)
   setInterval(async () => {
     if (current === 'admin' || document.hidden) return;
@@ -967,11 +1231,11 @@ function intro(force){
     return `<div class="icar" style="left:${left};top:${top};--d:${d}ms;--wob:${wob}vh;--c:${colors[i % colors.length]}"><span class="slot"></span>${carSVG(colors[i % colors.length], i + 1)}</div>`;
   }).join('');
   const T = []; const at = (ms, fn) => T.push(setTimeout(fn, ms));
-  const step = 480; ls.forEach((l, i) => at(400 + i * step, () => l.classList.add('on')));
+  const step = 480; ls.forEach((l, i) => at(400 + i * step, () => { l.classList.add('on'); window.PRLSound && PRLSound.beep(440, .12); }));
   const out = 400 + 5 * step + 350 + Math.random() * 600;  // random hold, like the real thing
   const finish = () => { T.forEach(clearTimeout); box.classList.add('exit'); document.body.classList.remove('intro-on');
     setTimeout(() => { box.classList.add('gone'); }, 850); try { sessionStorage.setItem('prl_intro','1'); } catch(_){} };
-  at(out, () => { row.classList.add('out'); box.classList.add('launch'); });
+  at(out, () => { row.classList.add('out'); box.classList.add('launch'); window.PRLSound && PRLSound.launch(); });
   at(out + 1150, () => box.classList.add('flash'));
   at(out + 1500, () => box.classList.add('logo'));
   at(out + 3700, finish);
