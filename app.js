@@ -18,7 +18,7 @@ function setData(o){
   // migrate old single-tier format
   if (!o.tiers) { o.tiers = { t1:{ name:'Tier 1', drivers:o.drivers||[], calendar:o.calendar||[], results:o.results||[] }, t2:{ name:'Tier 2', drivers:[], calendar:[], results:[] } }; }
   delete o.drivers; delete o.calendar; delete o.results;
-  o.teams = o.teams || []; o.news = o.news || []; o.transfers = o.transfers || []; o.hall = o.hall || []; o.live = o.live || { mode:'auto', url:'', note:'' };
+  o.teams = o.teams || []; o.news = o.news || []; o.transfers = o.transfers || []; o.hall = o.hall || []; o.archive = o.archive || []; o.live = o.live || { mode:'auto', url:'', note:'' };
   if (!o.tiers[tier]) tier = Object.keys(o.tiers)[0];
   ['drivers','calendar','results'].forEach(k => Object.defineProperty(o, k, {
     get(){ return o.tiers[tier][k]; }, set(v){ o.tiers[tier][k] = v; }, enumerable:false, configurable:true }));
@@ -230,6 +230,119 @@ function countdownHTML(r){
     </div>
     ${cdBlock(r.date)}
   </div>`;
+}
+
+/* ---------- modal + file helpers ---------- */
+function showModal(html, cls = ''){
+  const m = document.getElementById('modal');
+  m.className = 'show ' + cls; m.innerHTML = `<div class="modal-box"><button class="modal-x" data-closemodal aria-label="Close">✕</button>${html}</div>`;
+  document.body.classList.add('locked');
+}
+function closeModal(){ const m = document.getElementById('modal'); m.className = ''; m.innerHTML = ''; document.body.classList.remove('locked'); }
+document.getElementById('modal').addEventListener('click', async e => {
+  if (e.target.id === 'modal' || e.target.closest('[data-closemodal]')) return closeModal();
+  const c = openGraphic.cur; if (!c) return;
+  if (e.target.closest('[data-gfxdl]')) { downloadBlob(c.blob, c.name); toast('Downloading'); }
+  if (e.target.closest('[data-gfxshare]')) { try { await navigator.share({ files:[c.file], title:'PRL results' }); } catch(_){} }
+  if (e.target.closest('[data-gfxcopy]')) { try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': c.blob })]); toast('Copied — paste it into Discord'); } catch(_) { toast('Copy blocked — use Download'); } }
+});
+function downloadBlob(blob, name){
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ---------- add to calendar (.ics + Google) ---------- */
+const icsDate = d => new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+const icsEsc = s => String(s || '').replace(/\\/g, '\\\\').replace(/[,;]/g, m => '\\' + m).replace(/\n/g, '\\n');
+const SITE = `https://${GH.owner}.github.io/${GH.repo}/`;
+function raceTitle(r){ return `PRL ${tierName()} R${r.round} — ${r.name}`; }
+function icsFor(races){
+  const now = icsDate(Date.now()), L = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Pinnacle Racing League//PRL//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH','X-WR-CALNAME:PRL ' + icsEsc(tierName())];
+  races.filter(r => hasDate(r.date)).forEach(r => {
+    const st = new Date(r.date), en = new Date(st.getTime() + 2 * 3600e3);
+    L.push('BEGIN:VEVENT', `UID:prl-${tier}-r${r.round}@${GH.owner}.github.io`, 'DTSTAMP:' + now, 'DTSTART:' + icsDate(st), 'DTEND:' + icsDate(en),
+      'SUMMARY:' + icsEsc(raceTitle(r)), 'LOCATION:' + icsEsc(r.track), 'DESCRIPTION:' + icsEsc('Pinnacle Racing League — ' + SITE + '#calendar'), 'URL:' + SITE + '#calendar',
+      'BEGIN:VALARM', 'TRIGGER:-PT30M', 'ACTION:DISPLAY', 'DESCRIPTION:' + icsEsc('Lights out in 30 minutes — ' + r.name), 'END:VALARM', 'END:VEVENT');
+  });
+  L.push('END:VCALENDAR');
+  return L.join('\r\n') + '\r\n';
+}
+function gcalLink(r){
+  const st = new Date(r.date), en = new Date(st.getTime() + 2 * 3600e3);
+  return 'https://calendar.google.com/calendar/render?action=TEMPLATE&text=' + encodeURIComponent(raceTitle(r)) +
+    '&dates=' + icsDate(st) + '/' + icsDate(en) + '&location=' + encodeURIComponent(r.track || '') + '&details=' + encodeURIComponent('Pinnacle Racing League\n' + SITE + '#calendar');
+}
+function calButtons(r){
+  if (!hasDate(r.date) || new Date(r.date) < Date.now() || resultFor(r.round)) return '';
+  return `<div class="cal-add"><button class="btn sm" data-ics="${r.round}"><span>📅 Add to calendar</span></button>
+    <a class="btn sm ghost" href="${esc(gcalLink(r))}" target="_blank" rel="noopener"><span>Google Calendar</span></a></div>`;
+}
+
+/* ---------- results graphic (1080×1350 for Instagram / Discord) ---------- */
+const loadImg = (src, cors) => new Promise(res => { const i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = () => res(null); i.src = src; });
+async function makeGraphic(round){
+  try { await Promise.all(['400 40px "Russo One"', '700 30px "Titillium Web"', '900 30px "Titillium Web"'].map(f => document.fonts.load(f))); } catch(_){}
+  const W = 1080, H = 1350, cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+  const g = cv.getContext('2d'), OR = '#ff6a00', DISP = '"Russo One", Impact, sans-serif', BODY = '"Titillium Web", Arial, sans-serif';
+  const r = byRound().find(x => x.round === round) || { name:'Round ' + round, track:'' }, res = resultFor(round), cl = classify(res);
+  // background
+  g.fillStyle = '#0a0a0a'; g.fillRect(0, 0, W, H);
+  const rg = g.createRadialGradient(W * .85, 120, 20, W * .85, 120, 700); rg.addColorStop(0, 'rgba(255,106,0,.35)'); rg.addColorStop(1, 'rgba(255,106,0,0)');
+  g.fillStyle = rg; g.fillRect(0, 0, W, H);
+  g.save(); g.translate(W - 260, -40); g.transform(1, 0, -.28, 1, 0, 0);
+  [[OR, 120], ['#fff', 26], ['#1a1a1a', 70]].reduce((x, [c, w]) => { g.fillStyle = c; g.fillRect(x, 0, w, 470); return x + w + 22; }, 0); g.restore();
+  // track map, faint
+  if (r.image) { const ti = await loadImg(/^https?:/.test(r.image) ? r.image : new URL(r.image, location.href).href, true);
+    if (ti) { g.save(); g.globalAlpha = .16; if (isWiki(r.image)) g.filter = 'invert(1)'; const s = Math.min(560 / ti.width, 380 / ti.height); g.drawImage(ti, W - ti.width * s - 50, 60, ti.width * s, ti.height * s); g.restore(); } }
+  // header
+  const logo = await loadImg('assets/logo.png');
+  if (logo) g.drawImage(logo, 60, 56, 96, 96 * logo.height / logo.width);
+  g.fillStyle = '#fff'; g.font = `700 22px ${BODY}`; g.letterSpacing = '6px'; g.fillText('PINNACLE RACING LEAGUE', 176, 98);
+  g.fillStyle = OR; g.fillText((tierName() + ' · ' + (D.league.season || '')).toUpperCase(), 176, 130); g.letterSpacing = '0px';
+  g.fillStyle = OR; g.font = `900 30px ${BODY}`; g.fillText(`ROUND ${round} · RACE RESULT`, 60, 230);
+  g.fillStyle = '#fff'; g.font = `400 ${r.name.length > 20 ? 64 : 80}px ${DISP}`; g.fillText(r.name.toUpperCase(), 56, 315, W - 110);
+  g.fillStyle = '#9a9a9a'; g.font = `600 28px ${BODY}`; g.fillText((r.track || '') + (hasDate(r.date) ? '  ·  ' + fmtDate(r.date) : ''), 60, 360);
+  // podium
+  const pod = cl.filter(e => e.pos !== 'DNF').slice(0, 3), slots = [[1, 380, 230], [0, 70, 300], [2, 690, 190]], baseY = 760;
+  slots.forEach(([i, x, h]) => { const e = pod[i]; if (!e) return; const d = driver(e.d), t = team(e.t), w = 300, y = baseY - h;
+    g.fillStyle = '#151515'; g.fillRect(x, y, w, h); g.fillStyle = t.color; g.fillRect(x, y, w, 10);
+    g.fillStyle = i === 0 ? OR : '#fff'; g.font = `400 ${[120, 92, 70][i]}px ${DISP}`; g.fillText(String(i + 1), x + 22, y + [130, 106, 84][i]);
+    g.fillStyle = '#fff'; g.font = `900 ${d.name.length > 14 ? 26 : 32}px ${BODY}`; g.fillText(d.name.toUpperCase(), x + 22, baseY - 62, w - 40);
+    g.fillStyle = '#aaa'; g.font = `600 22px ${BODY}`; g.fillText(t.name, x + 22, baseY - 30, w - 40);
+    if (e.gap) { g.fillStyle = i === 0 ? OR : '#ddd'; g.font = `700 22px ${BODY}`; g.textAlign = 'right'; g.fillText(e.gap, x + w - 18, y + 50); g.textAlign = 'left'; }
+  });
+  // P4–P10
+  let y = 820; cl.slice(3, 10).forEach((e, k) => { const d = driver(e.d), t = team(e.t);
+    g.fillStyle = k % 2 ? '#111' : '#151515'; g.fillRect(60, y, W - 120, 52);
+    g.fillStyle = t.color; g.fillRect(140, y + 10, 6, 32);
+    g.fillStyle = e.pos === 'DNF' ? '#ff6b6b' : '#fff'; g.font = `400 26px ${DISP}`; g.fillText(String(e.pos), 80, y + 36);
+    g.fillStyle = '#fff'; g.font = `700 26px ${BODY}`; g.fillText(d.name.toUpperCase(), 164, y + 35, 420);
+    g.fillStyle = '#888'; g.font = `600 20px ${BODY}`; g.fillText(t.name, 600, y + 34, 220);
+    g.textAlign = 'right'; g.fillStyle = OR; g.font = `400 24px ${DISP}`; g.fillText(e.pts ? '+' + e.pts : (e.pos === 'DNF' ? 'DNF' : ''), W - 80, y + 36); g.textAlign = 'left';
+    y += 56; });
+  // pole / fastest lap
+  y = Math.max(y + 24, 1230);
+  const chip = (x, lbl, name, c) => { g.fillStyle = c; g.fillRect(x, y, 8, 54); g.fillStyle = c; g.font = `900 20px ${BODY}`; g.fillText(lbl, x + 24, y + 22); g.fillStyle = '#fff'; g.font = `700 26px ${BODY}`; g.fillText(name.toUpperCase(), x + 24, y + 50, 380); };
+  if (res.pole) chip(60, 'POLE POSITION', driver(res.pole).name, OR);
+  if (res.fl) chip(560, 'FASTEST LAP', driver(res.fl).name, '#a238ff');
+  // chequered footer
+  for (let i = 0; i < W / 20; i++) for (let j = 0; j < 2; j++) { g.fillStyle = (i + j) % 2 ? '#fff' : '#0a0a0a'; g.fillRect(i * 20, H - 40 + j * 20, 20, 20); }
+  return cv;
+}
+async function openGraphic(round){
+  showModal(`<div class="gfx-wait">Building graphic…</div>`, 'gfx');
+  const cv = await makeGraphic(round);
+  const blob = await new Promise(r => cv.toBlob(r, 'image/png'));
+  const name = `PRL-${tier}-R${round}-results.png`, url = URL.createObjectURL(blob);
+  const file = new File([blob], name, { type:'image/png' });
+  const canShare = navigator.canShare && navigator.canShare({ files:[file] });
+  showModal(`<img class="gfx-img" src="${url}" alt="Results graphic">
+    <div class="actions gfx-actions">
+      ${canShare ? `<button class="btn" data-gfxshare><span>📤 Share</span></button>` : ''}
+      <button class="btn ${canShare ? 'ghost' : ''}" data-gfxdl><span>⬇ Download</span></button>
+      ${window.ClipboardItem ? `<button class="btn ghost" data-gfxcopy><span>Copy image</span></button>` : ''}
+    </div>`, 'gfx');
+  openGraphic.cur = { blob, name, file };
 }
 
 /* ---------- LIVE race-night mode ---------- */
@@ -584,6 +697,7 @@ function showcaseHTML(r, isNext){
       <div class="sc-when">${hasDate(r.date) ? `<b>${fmtDate(r.date, { weekday:'long', day:'numeric', month:'long' })}</b><span>Lights out ${fmtTime(r.date)}</span>` : `<b>Date TBC</b><span>Keep an eye on the news</span>`}</div>
       ${!res ? cdBlock(r.date)
         : `<a href="#results" data-round="${r.round}" class="btn sm"><span>View result</span></a>`}
+      ${calButtons(r)}
       ${!isNext && nextRace() ? `<button class="btn sm ghost" data-focus="" style="margin-top:14px"><span>← Back to next race</span></button>` : ''}
     </div>
   </section>`;
@@ -594,6 +708,7 @@ pages.calendar = () => {
   const focus = pages.calendar.focus && byRound().find(r => r.round === pages.calendar.focus);
   const show = focus || nx;
   return head('Season Schedule', 'Calen<span>dar</span>', String(D.calendar.length).padStart(2,'0')) +
+    (D.calendar.some(r => hasDate(r.date) && new Date(r.date) > Date.now()) ? `<div class="actions" style="margin-bottom:18px"><button class="btn sm ghost" data-icsall><span>📅 Add the whole ${esc(tierName())} season to my calendar</span></button></div>` : '') +
     showcaseHTML(show, show && nx && show.round === nx.round) +
     (!D.calendar.length ? `<div class="empty">The ${esc(tierName())} calendar hasn't been announced yet.</div>` : '') +
     `<div class="cal" style="margin-top:28px">${byRound().map(r => {
@@ -677,6 +792,16 @@ const trophySVG = (c = '#ff6a00') => `<svg viewBox="0 0 120 150" class="trophy" 
   <rect x="28" y="118" width="64" height="24" rx="2" fill="#151515" stroke="${c}" stroke-width="2"/>
   <text x="60" y="135" text-anchor="middle" font-family="Arial Black,Arial" font-size="11" fill="${c}">PRL</text>
   <path d="M40 16 L46 16 L44 44 Q44 56 52 66 Q38 58 38 44 Z" fill="#fff" opacity=".45"/></svg>`;
+function bindTiers(o){
+  ['drivers','calendar','results'].forEach(k => Object.defineProperty(o, k, {
+    get(){ return o.tiers[tier][k]; }, set(v){ o.tiers[tier][k] = v; }, enumerable:false, configurable:true }));
+  return o;
+}
+function withArchive(snap, tid, fn){
+  const oD = D, oT = tier;
+  D = bindTiers({ league:{ ...oD.league, season:snap.label }, points:snap.points || oD.points, teams:snap.teams, tiers:snap.tiers, news:[], transfers:[], hall:[], live:{ mode:'off' } });
+  tier = tid; try { return fn(); } finally { D = oD; tier = oT; }
+}
 function withTier(id, fn){ const old = tier; tier = id; try { return fn(); } finally { tier = old; } }
 
 pages.hall = () => {
@@ -702,10 +827,36 @@ pages.hall = () => {
         ${h.note ? `<p>${esc(h.note)}</p>` : ''}
       </div>`).join('')}</div>`
     : `<div class="cabinet-empty reveal">${trophySVG()}${trophySVG('#fff')}${trophySVG()}<p>The cabinet is waiting for its first champion.</p></div>`}
+    ${(D.archive || []).length ? `<h2 class="section-title">Past Seasons</h2>
+      <div class="grid g3">${[...D.archive].reverse().map(a => `<a href="#season-${esc(a.id)}" class="card season-card reveal tilt"><small>ARCHIVED ${fmtDate(a.archivedAt)}</small><h3>${esc(a.label)}</h3>
+        <span>${Object.values(a.tiers).map(t => `${esc(t.name)}: ${t.results.length} races`).join(' · ')}</span><em>View season →</em></a>`).join('')}</div>` : ''}
     <h2 class="section-title">This Season's Records</h2>
     ${recs.length ? `<div class="grid g3">${recs.map(x => `<a href="#driver-${esc(x.id)}" class="card rec reveal tilt" style="--tc:${x.team.color}">
         <small><span class="kt">${esc(x.tier)}</span>${esc(x.lbl)}</small><b>${esc(x.val)}</b><em>${esc(x.unit)}</em><span>${esc(x.who)} · ${esc(x.team.name)}</span></a>`).join('')}</div>`
     : `<div class="empty">Records appear once races have been run.</div>`}`;
+};
+
+pages.archive = (id) => {
+  const snap = (D.archive || []).find(a => a.id === id);
+  if (!snap) return head('Archive', 'Season <span>not found</span>', '?') + `<div class="empty"><a href="#hall" style="color:var(--or)">Back to the Hall of Fame</a></div>`;
+  const tids = Object.keys(snap.tiers);
+  let tid = pages.archive.tier; if (!snap.tiers[tid]) tid = tids[0];
+  return withArchive(snap, tid, () => {
+    const S = compute(); const champ = S.drivers[0] && S.drivers[0].pts ? driver(S.drivers[0].id) : null; const con = S.teams[0] && S.teams[0].pts ? team(S.teams[0].id) : null;
+    const rounds = byRound().filter(r => resultFor(r.round));
+    return head('Season Archive', esc(snap.label), '★', `Archived ${fmtDate(snap.archivedAt)} · ${rounds.length} races`) + `
+      <div class="actions" style="margin-bottom:18px"><a href="#hall" class="btn sm ghost"><span>← Hall of Fame</span></a>
+        <div class="tabs">${tids.map(x => `<button data-arch="${x}" class="${x===tid?'on':''}"><span>${esc(snap.tiers[x].name || x)}</span></button>`).join('')}</div></div>
+      ${champ ? `<div class="arch-champ reveal" style="--tc:${team(champ.team).color}"><div class="champ-trophy">${trophySVG()}</div>
+        <div><small>${esc(snap.tiers[tid].name || '')} DRIVERS' CHAMPION</small><h2>${esc(champ.name)}</h2><span>${esc(team(champ.team).name)} · ${S.drivers[0].pts} pts · ${S.drivers[0].wins} wins</span>
+        ${con ? `<p>🏁 Constructors' champion: <b>${esc(con.name)}</b> (${S.teams[0].pts} pts)</p>` : ''}</div></div>` : ''}
+      <h2 class="section-title">Final Drivers' Standings</h2>${driverTable(S).replace(/href="#driver-[^"]*"/g, '')}
+      <h2 class="section-title">Final Constructors' Standings</h2>${teamTable(S)}
+      <h2 class="section-title">Race Winners</h2>
+      <div class="grid g4">${rounds.map(r => { const c = classify(resultFor(r.round)).filter(e => e.pos !== 'DNF');
+        return `<div class="card pf-race reveal"><small>R${r.round} ${flag(r.country)}</small><span>${esc(r.name)}</span>
+          ${c.slice(0,3).map((e,i) => `<div class="arch-pod"><i style="background:${team(e.t).color}"></i>P${i+1} ${esc(driver(e.d).name)}</div>`).join('')}</div>`; }).join('') || '<div class="empty">No races were run.</div>'}</div>`;
+  });
 };
 
 pages.results = () => {
@@ -722,6 +873,7 @@ pages.results = () => {
     <div class="res-head">
       <div><div style="color:var(--or);font-weight:700;letter-spacing:.25em;font-size:12px">ROUND ${sel}</div><h2>${flag(r.country)} ${esc(r.name)}</h2><div style="color:var(--mut)">${esc(r.track)}${hasDate(r.date) ? ' · ' + fmtDate(r.date) : ''}</div></div>
       <div class="badges">
+        <button class="btn sm" data-graphic="${sel}"><span>📸 Share graphic</span></button>
         ${res.pole ? `<div class="badge"><b>POLE</b>${esc(driver(res.pole).name)}</div>` : ''}
         ${res.fl ? `<div class="badge"><b>FASTEST LAP</b>${esc(driver(res.fl).name)}</div>` : ''}
       </div>
@@ -894,6 +1046,17 @@ function settingsView(){
   const Lv = D.live || {};
   return connectView(false) + `
   <div class="panel">
+    <h3>🏁 End of season</h3>
+    <p class="sub" style="margin:0 0 14px">Saves <b>${esc(D.league.season)}</b> — every tier's drivers, teams, calendar and results — into the Archive (shown on the Hall of Fame page), then starts the next season.</p>
+    <div class="form-grid">
+      <label class="field" style="grid-column:span 2">New season name<input type="text" id="arNext" placeholder="e.g. F1 26 — Season 2"></label>
+    </div>
+    <label class="chk"><input type="checkbox" id="arHall" checked> Add the champions to the Hall of Fame trophy cabinet</label>
+    <label class="chk"><input type="checkbox" id="arRes" checked> Clear results for the new season</label>
+    <label class="chk"><input type="checkbox" id="arCal"> Clear the calendar too</label>
+    <div class="actions" style="margin-top:14px"><button class="btn sm danger" data-archive><span>Archive season & start the next</span></button></div>
+  </div>
+  <div class="panel">
     <h3>🔴 Race night (LIVE mode)</h3>
     <p class="sub" style="margin:0 0 14px">On <b>Auto</b> the site goes LIVE from 15 min before a race until 2½ hours after (or until its result is saved), then switches back by itself. Paste a Twitch channel or YouTube live link to embed the stream.</p>
     <div class="form-grid">
@@ -964,16 +1127,16 @@ addEventListener('resize', () => syncTierUI());
 /* ---------- router & render ---------- */
 const ROUTES = ['home','standings','transfers','news','teams','drivers','calendar','results','hall','admin'];
 let current = null, first = true;
-function route(){ const h = location.hash.slice(1); if (/^driver-/.test(h)) return 'driver'; return ROUTES.includes(h) ? h : 'home'; }
+function route(){ const h = location.hash.slice(1); if (/^driver-/.test(h)) return 'driver'; if (/^season-/.test(h)) return 'archive'; return ROUTES.includes(h) ? h : 'home'; }
 
 function render(keepScroll){
   const r = route();
   const y = window.scrollY;
   current = r;
-  app.innerHTML = `<div class="page">${r === 'driver' ? pages.driver(location.hash.slice(8)) : pages[r]()}</div>`;
+  app.innerHTML = `<div class="page">${r === 'driver' ? pages.driver(location.hash.slice(8)) : r === 'archive' ? pages.archive(location.hash.slice(8)) : pages[r]()}</div>`;
   syncTierUI();
   document.title = (r === 'home' ? '' : r.charAt(0).toUpperCase() + r.slice(1) + ' · ') + 'PRL — Pinnacle Racing League';
-  document.querySelectorAll('#desknav a, .menu-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (r === 'driver' ? 'drivers' : r)));
+  document.querySelectorAll('#desknav a, .menu-links a').forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + (r === 'driver' ? 'drivers' : r === 'archive' ? 'hall' : r)));
   moveInk();
   if (keepScroll) { window.scrollTo(0, y); app.querySelector('.page').style.animation = 'none'; }
   else window.scrollTo(0, 0);
@@ -1053,10 +1216,14 @@ if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
 
 /* ---------- events ---------- */
 app.addEventListener('click', async e => {
-  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay], [data-focus], [data-h2h], [data-goh2h], [data-bd]');
+  const t = e.target.closest('button, [data-toggle], [data-round], [data-replay], [data-focus], [data-h2h], [data-goh2h], [data-bd], [data-season], [data-arch]');
   if (!t) return;
   if (t.dataset.toggle !== undefined) { t.classList.toggle('open'); return; }
   if (t.dataset.replay !== undefined) { intro(true); return; }
+  if (t.dataset.ics) { const r = byRound().find(x => x.round === +t.dataset.ics); downloadBlob(new Blob([icsFor([r])], { type:'text/calendar' }), `PRL-R${r.round}.ics`); toast('Open the file to add it to your calendar'); return; }
+  if (t.dataset.icsall !== undefined) { downloadBlob(new Blob([icsFor(byRound())], { type:'text/calendar' }), `PRL-${tierName().replace(/\s+/g,'')}-season.ics`); toast('Open the file to add every race'); return; }
+  if (t.dataset.graphic) { openGraphic(+t.dataset.graphic); return; }
+  if (t.dataset.arch !== undefined) { pages.archive.tier = t.dataset.arch; render(true); return; }
   if (t.dataset.h2h) { pages.drivers.h2h = t.dataset.h2h.split(':'); pages.drivers.jump = true; return; }
   if (t.dataset.goh2h !== undefined) { e.preventDefault(); document.getElementById('h2h')?.scrollIntoView({ behavior:'smooth' }); return; }
   if (t.dataset.bd) { const svg = t.closest('svg'); const on = t.classList.contains('hl'); svg.querySelectorAll('.bl').forEach(g => g.classList.remove('hl')); svg.classList.toggle('focus', !on); if (!on) t.classList.add('hl'); return; }
@@ -1095,6 +1262,20 @@ app.addEventListener('click', async e => {
     try { let s = document.getElementById('importBox').value.trim().replace(/^window\.PRL_DATA\s*=\s*/, '').replace(/;\s*$/, '');
       const o = JSON.parse(s); if (!(o.tiers || o.drivers) || !o.teams) throw 0; setData(o); resDraft = null; save('Restored backup'); render(true); }
     catch(_) { toast('Could not read that backup'); } return;
+  }
+  if (t.dataset.archive !== undefined) {
+    const next = document.getElementById('arNext').value.trim();
+    if (!next) return toast('Give the new season a name first');
+    if (t.dataset.confirm !== '1') { t.dataset.confirm = '1'; t.querySelector('span').textContent = 'Click again to confirm'; return; }
+    const snap = { id: uid('s'), label: D.league.season, archivedAt: new Date().toISOString().slice(0,10), points: clone(D.points), teams: clone(D.teams), tiers: clone(D.tiers) };
+    if (document.getElementById('arHall').checked) tierIds().forEach(id => withTier(id, () => {
+      const S = compute(); const c = S.drivers[0], k = S.teams[0];
+      if (c && c.pts) D.hall.push({ id: uid('h'), season: D.league.season, tier: tierName(id), champion: driver(c.id).name, team: team(driver(c.id).team).name, constructor: k && k.pts ? team(k.id).name : '' });
+    }));
+    D.archive.push(snap);
+    tierIds().forEach(id => { if (document.getElementById('arRes').checked) D.tiers[id].results = []; if (document.getElementById('arCal').checked) D.tiers[id].calendar = []; });
+    D.league.season = next; setSeason(); resDraft = null;
+    save('Season archived'); render(true); return;
   }
   if (t.dataset.savelive !== undefined) {
     D.live = { mode: document.getElementById('lvMode').value, url: document.getElementById('lvUrl').value.trim(), note: document.getElementById('lvNote').value.trim() };
@@ -1197,6 +1378,23 @@ app.addEventListener('submit', async e => {
     render(true);
   }
 });
+
+/* ---------- install as an app (PWA) ---------- */
+let installEvt = null;
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function syncInstall(){ document.querySelectorAll('[data-install]').forEach(b => b.hidden = standalone() || !(installEvt || isIOS())); }
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; syncInstall(); });
+addEventListener('appinstalled', () => { installEvt = null; syncInstall(); toast('PRL installed 🏁'); });
+document.addEventListener('click', async e => {
+  if (!e.target.closest('[data-install]')) return;
+  closeMenu();
+  if (installEvt) { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; syncInstall(); return; }
+  showModal(`<div class="ios-help"><img src="assets/icons/icon-192.png" alt=""><h3>Add PRL to your Home Screen</h3>
+    <ol><li>Tap the <b>Share</b> button <span class="ios-ico">⬆︎</span> in Safari's toolbar.</li><li>Scroll down and tap <b>Add to Home Screen</b>.</li><li>Tap <b>Add</b>. PRL opens full-screen like a real app.</li></ol></div>`);
+});
+syncInstall();
+if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
 
 /* ---------- boot ---------- */
 function setSeason(){ document.getElementById('season-label').textContent = D.league.season || ''; }

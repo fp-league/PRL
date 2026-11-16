@@ -707,3 +707,37 @@ body.is-live #topbar::after{background:linear-gradient(90deg,#e10600,#ff6a00)}
 .garage-fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;padding:40px}
 .garage-fallback svg{width:80%;max-width:600px}
 .garage.no3d .garage-fallback{display:flex}.garage.no3d canvas,.garage.no3d .garage-hint{display:none}
+
+/* ---------- modal ---------- */
+#modal{position:fixed;inset:0;z-index:150;display:none;align-items:center;justify-content:center;padding:20px;background:rgba(0,0,0,.8);backdrop-filter:blur(6px)}
+#modal.show{display:flex;animation:fadeIn .25s}
+@keyframes fadeIn{from{opacity:0}}
+.modal-box{position:relative;max-width:560px;width:100%;max-height:92vh;overflow:auto;background:var(--bk2);border:1px solid var(--line);border-top:4px solid var(--or);padding:26px;animation:scIn .35s var(--ease)}
+.modal-x{position:absolute;top:8px;right:8px;background:none;border:0;color:#aaa;font-size:20px;cursor:pointer;padding:6px 10px}
+.modal-x:hover{color:var(--or)}
+#modal.gfx .modal-box{max-width:520px;padding:18px}
+.gfx-img{display:block;width:100%;height:auto;border:1px solid #222}
+.gfx-actions{justify-content:center;margin-top:14px}
+.gfx-wait{padding:60px 0;text-align:center;color:var(--mut);font-weight:700;letter-spacing:.2em;text-transform:uppercase}
+.ios-help{text-align:center}
+.ios-help img{width:84px;border-radius:20px;margin-bottom:10px}
+.ios-help h3{font-family:var(--disp);font-weight:400;font-size:24px;text-transform:uppercase;margin-bottom:14px}
+.ios-help ol{text-align:left;display:flex;flex-direction:column;gap:10px;margin-left:22px;color:#ddd}
+.ios-ico{display:inline-block;border:1px solid #555;padding:0 6px;border-radius:4px}
+.cal-add{display:flex;flex-wrap:wrap;gap:10px;margin-top:16px}
+.foot-btns{display:flex;gap:8px;flex-wrap:wrap}
+.install-btn[hidden]{display:none}
+.menu-install{position:relative;align-self:flex-start;margin-top:22px;background:var(--or);color:var(--bk);border:0;font-weight:900;letter-spacing:.12em;text-transform:uppercase;font-size:13px;padding:12px 18px;transform:skewX(-12deg);cursor:pointer}
+/* archive */
+.season-card{padding:24px;display:flex;flex-direction:column;gap:6px;color:inherit;border-top:3px solid var(--or)}
+.season-card small{color:var(--mut);font-weight:700;letter-spacing:.18em;font-size:11px}
+.season-card h3{font-family:var(--disp);font-weight:400;font-size:26px;text-transform:uppercase;line-height:1.05}
+.season-card span{color:#bbb;font-size:14px}.season-card em{font-style:normal;color:var(--or);font-weight:700;font-size:13px;margin-top:6px}
+.arch-champ{display:flex;align-items:center;gap:26px;padding:26px;margin-bottom:10px;background:radial-gradient(ellipse at 0% 50%,#ffb34722,transparent 60%),var(--bk2);border:1px solid var(--line);border-left:6px solid var(--tc)}
+.arch-champ .champ-trophy{width:110px;flex:0 0 auto}
+.arch-champ small{color:#ffc861;font-weight:900;letter-spacing:.22em;font-size:12px}
+.arch-champ h2{font-family:var(--disp);font-weight:400;font-size:clamp(30px,5vw,54px);text-transform:uppercase;line-height:1}
+.arch-champ span{color:#ccc}.arch-champ p{margin-top:8px;color:#ddd}
+.arch-pod{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;margin-top:4px}
+.arch-pod i{width:4px;height:16px}
+.actions .tabs{margin-bottom:0}
