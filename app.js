@@ -108,22 +108,8 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt
 const team = id => D.teams.find(t => t.id === id) || { name: '—', color: '#555', id: '' };
 const driver = id => D.drivers.find(d => d.id === id) || { name: 'Unknown', number: '', team: '' };
 const flag = cc => (cc && cc.length === 2) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1A5 + c.charCodeAt(0))) : '';
-function carSVG(c, n){
-  return `<svg viewBox="-3 0 66 140" aria-hidden="true">
-    <rect x="-2" y="92" width="13" height="28" rx="3" fill="#111"/><rect x="49" y="92" width="13" height="28" rx="3" fill="#111"/>
-    <rect x="0" y="20" width="11" height="23" rx="3" fill="#111"/><rect x="49" y="20" width="11" height="23" rx="3" fill="#111"/>
-    <path d="M10 31L25 36M10 33L24 44M50 31L35 36M50 33L36 44M10 104L18 100M50 104L42 100" stroke="#333" stroke-width="2"/>
-    <rect x="4" y="3" width="52" height="8" rx="2" fill="${c}"/><rect x="2" y="2" width="4" height="11" rx="1" fill="#111"/><rect x="54" y="2" width="4" height="11" rx="1" fill="#111"/>
-    <path d="M26 9L34 9L37 52L23 52Z" fill="${c}"/>
-    <path d="M22 50Q30 45 38 50L46 66L47 100Q44 113 38 119L22 119Q16 113 13 100L14 66Z" fill="${c}"/>
-    <path d="M14 68L21 62L21 104L15 101Z M46 68L39 62L39 104L45 101Z" fill="#000" opacity=".28"/>
-    <rect x="28" y="72" width="4" height="44" fill="#fff" opacity=".85"/>
-    <ellipse cx="30" cy="64" rx="5.5" ry="9" fill="#111"/><circle cx="30" cy="65" r="3.6" fill="#fff"/>
-    <path d="M23.5 59Q30 50 36.5 59" stroke="#222" stroke-width="2.4" fill="none"/>
-    <rect x="6" y="124" width="48" height="10" rx="1.5" fill="#111"/><rect x="6" y="124" width="48" height="3" fill="${c}"/>
-    ${n ? `<text x="30" y="132.5" font-size="8" font-weight="900" text-anchor="middle" fill="#fff" font-family="sans-serif">${n}</text>` : ''}
-  </svg>`;
-}
+const carSVG = (c, n) => window.carTop(c, n);
+const carSide = (c, n) => window.carSide(c, null, n);
 const fmtDate = (s, opts) => { const d = new Date(s); return isNaN(d) ? esc(s) : d.toLocaleDateString('en-GB', opts || { day:'numeric', month:'short', year:'numeric' }); };
 const fmtTime = s => { const d = new Date(s); return isNaN(d) ? '' : d.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' }); };
 const byRound = () => [...D.calendar].sort((a,b) => a.round - b.round);
@@ -262,7 +248,7 @@ pages.home = () => {
 
   const pod = (s, cls, pos) => { if (!s) return `<div class="pod ${cls}"><div class="pos">${pos}</div><h4>TBD</h4></div>`;
     const d = driver(s.id), t = team(d.team);
-    return `<div class="pod ${cls}" style="--tc:${t.color}"><div class="pos">${pos}</div><h4>${esc(d.name)}</h4><div class="tm">${esc(t.name)}</div><div class="pts"><span data-count="${s.pts}">0</span><small>PTS</small></div></div>`; };
+    return `<div class="pod ${cls} tilt" style="--tc:${t.color}"><div class="pos">${pos}</div><div class="pod-car">${carSide(t.color, d.number)}</div><h4>${esc(d.name)}</h4><div class="tm">${esc(t.name)}</div><div class="pts"><span data-count="${s.pts}">0</span><small>PTS</small></div></div>`; };
 
   const tick = [
     nx && `<b>NEXT</b> R${nx.round} ${esc(nx.name)} · ${fmtDate(nx.date,{weekday:'short',day:'numeric',month:'short'})} ${fmtTime(nx.date)}`,
@@ -308,8 +294,8 @@ pages.home = () => {
       </div>
     </div>
     <img class="hero-logo" src="assets/logo.png" alt="PRL logo" onerror="this.remove()">
-    <div class="hero-car hc1">${carSVG('#ff6a00')}</div>
-    <div class="hero-car hc2">${carSVG('#ffffff')}</div>
+    <div class="hero-car hc1 moving">${carSide('#ff6a00', 1)}</div>
+    <div class="hero-car hc2 moving">${carSide('#f2f2f2', 2)}</div>
     <div class="ticker"><div class="ticker-track">${tickHTML}${tickHTML}${tickHTML}${tickHTML}</div></div>
   </section>
   ${countdownHTML(nx)}
@@ -411,9 +397,10 @@ pages.teams = () => {
   return head('The Grid', 'Teams', String(D.teams.length).padStart(2,'0'), `${D.teams.length} constructors fighting for the PRL title.`) +
     `<div class="grid g3">${S.teams.map((s,i) => { const t = team(s.id);
       const dr = D.drivers.filter(d => d.team === t.id);
-      return `<div class="card team-card reveal" style="--tc:${t.color}">
+      return `<div class="card team-card reveal tilt" style="--tc:${t.color}">
         <div class="tpts">${s.pts}<small>PTS · P${i+1}</small></div>
         <h3>${esc(t.name)}</h3>
+        <div class="team-car">${carSide(t.color, dr[0] ? dr[0].number : '')}</div>
         <div class="meta">${esc(t.base || '')}${t.principal ? ' · TP: ' + esc(t.principal) : ''}</div>
         ${dr.map(d => `<div class="tdrv"><span>${esc(d.name)}</span><span>#${esc(d.number)}</span></div>`).join('') || '<div class="tdrv"><span style="color:var(--mut)">Seats open</span><span></span></div>'}
       </div>`; }).join('')}</div>`;
@@ -424,8 +411,9 @@ pages.drivers = () => {
   return head('The Grid', 'Dri<span>vers</span>', String(D.drivers.length).padStart(2,'0')) +
     (!D.drivers.length ? `<div class="empty">No ${esc(tierName())} drivers signed yet.</div>` : '') +
     `<div class="grid g4">${S.drivers.map((s,i) => { const d = driver(s.id), t = team(d.team);
-      return `<div class="card drv reveal" style="--tc:${t.color}">
+      return `<div class="card drv reveal tilt" style="--tc:${t.color}">
         <div class="big">${esc(d.number)}</div>
+        <div class="drv-car">${carSide(t.color, d.number)}</div>
         <div class="flag">${flag(d.country)} ${esc(d.country || '')} · P${i+1}</div>
         <h3>${esc(d.name)}</h3>
         <div class="tm">${esc(t.name)}</div>
@@ -801,6 +789,20 @@ function tick(){
   });
 }
 setInterval(tick, 1000);
+
+/* ---------- 3D tilt + shine on cards ---------- */
+if (matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  app.addEventListener('pointermove', e => {
+    const c = e.target.closest('.tilt'); if (!c) return;
+    const r = c.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    c.style.setProperty('--rx', ((.5 - y) * 8).toFixed(2) + 'deg');
+    c.style.setProperty('--ry', ((x - .5) * 10).toFixed(2) + 'deg');
+    c.style.setProperty('--gx', (x * 100).toFixed(1) + '%'); c.style.setProperty('--gy', (y * 100).toFixed(1) + '%');
+  });
+  app.addEventListener('pointerout', e => {
+    const c = e.target.closest('.tilt'); if (c && !c.contains(e.relatedTarget)) { c.style.removeProperty('--rx'); c.style.removeProperty('--ry'); }
+  });
+}
 
 /* ---------- events ---------- */
 app.addEventListener('click', async e => {

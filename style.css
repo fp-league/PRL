@@ -394,13 +394,13 @@ textarea{min-height:120px;resize:vertical}
 .hero-cta{animation:fadeR .8s .7s var(--ease) both}
 @keyframes fadeR{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:none}}
 .btn.replay{border-color:#444}
-.hero-car{position:absolute;z-index:1;width:46px;height:107px;left:0;pointer-events:none}
-.hero-car svg{width:100%;height:100%;filter:drop-shadow(0 8px 10px #000)}
-.hero-car::after{content:"";position:absolute;top:50%;right:60%;width:340px;height:30px;transform:translateY(-50%);background:linear-gradient(270deg,#ff6a0055,transparent);filter:blur(4px);opacity:.8}
-.hc1{bottom:62px;animation:driveBy 7s 1.2s cubic-bezier(.4,0,.6,1) infinite}
-.hc2{bottom:96px;animation:driveBy 7s 1.5s cubic-bezier(.4,0,.6,1) infinite}
-.hc2::after{background:linear-gradient(270deg,#ffffff40,transparent)}
-@keyframes driveBy{0%{transform:translateX(-300px) rotate(90deg)}28%{transform:translateX(calc(100vw + 300px)) rotate(90deg)}100%{transform:translateX(calc(100vw + 300px)) rotate(90deg)}}
+.hero-car{position:absolute;z-index:1;left:0;width:min(420px,70vw);pointer-events:none}
+.hero-car svg{width:100%;height:auto;display:block;filter:drop-shadow(0 10px 14px #000a)}
+.hero-car::before{content:"";position:absolute;right:92%;top:38%;width:460px;height:42%;background:linear-gradient(270deg,#ff6a0066,transparent);filter:blur(6px);border-radius:50%}
+.hc2::before{background:linear-gradient(270deg,#ffffff40,transparent)}
+.hc1{bottom:58px;animation:driveBy 8s 1.4s cubic-bezier(.45,0,.55,1) infinite}
+.hc2{bottom:70px;width:min(360px,60vw);opacity:.9;animation:driveBy 8s 1.75s cubic-bezier(.45,0,.55,1) infinite;z-index:0}
+@keyframes driveBy{0%{transform:translateX(-120%)}26%{transform:translateX(calc(100vw + 20%))}100%{transform:translateX(calc(100vw + 20%))}}
 .ticker{position:absolute;left:0;right:0;bottom:0;z-index:2;background:var(--or);color:var(--bk);overflow:hidden;border-top:3px solid var(--wh);transform:skewY(-1.2deg);transform-origin:left;margin-bottom:-6px}
 .ticker-track{display:flex;width:max-content;animation:marquee 40s linear infinite;padding:12px 0 16px}
 .ticker:hover .ticker-track{animation-play-state:paused}
@@ -494,3 +494,38 @@ img.inv{filter:invert(1) hue-rotate(180deg)}
 .sc-credit{position:absolute;right:12px;bottom:8px;font-size:10px;letter-spacing:.08em;color:#777;text-decoration:none}
 .sc-credit:hover{color:var(--or)}
 .countdown.cd-msg{grid-template-columns:1fr}.countdown.cd-msg b{font-size:clamp(22px,3vw,34px);letter-spacing:.08em;padding:10px 0}
+
+/* ---------- car models ---------- */
+.car-side .spin{transform-box:view-box}
+.moving .spin,.tilt:hover .spin{animation:wspin .22s linear infinite}
+@keyframes wspin{to{transform:rotate(360deg)}}
+.pod{transform:perspective(900px) rotateX(var(--rx,0)) rotateY(var(--ry,0));transition:transform .25s ease-out}
+.pod-car{width:100%;max-width:260px;margin:6px 0 -4px -6px;transition:transform .5s var(--ease)}
+.pod:hover .pod-car{transform:translateX(14px)}
+.pod.p1 .pod-car{max-width:300px}
+.team-car{position:relative;width:88%;margin:4px 0 10px -6%;transition:transform .6s var(--ease);filter:drop-shadow(0 6px 10px #000c)}
+.team-card:hover .team-car{transform:translateX(9%)}
+.drv{min-height:300px}
+.drv-car{position:absolute;left:-14%;top:42px;width:96%;opacity:.95;transition:transform .7s var(--ease);z-index:0}
+.drv:hover .drv-car{transform:translateX(18%)}
+.drv .flag,.drv h3,.drv .tm,.drv .stats{position:relative;z-index:1}
+
+/* ---------- polish: tilt, shine, carbon, grain ---------- */
+.tilt{transform:perspective(900px) rotateX(var(--rx,0)) rotateY(var(--ry,0)) translateY(var(--ty,0));transition:transform .25s ease-out,border-color .3s}
+.tilt:hover{--ty:-4px}
+.tilt::after{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at var(--gx,50%) var(--gy,0%),#ffffff1a,transparent 45%);opacity:0;transition:opacity .3s;z-index:2}
+.tilt:hover::after{opacity:1}
+.card.reveal.vis.tilt{transform:perspective(900px) rotateX(var(--rx,0)) rotateY(var(--ry,0)) translateY(var(--ty,0));transition:transform .25s ease-out,opacity .6s,border-color .3s}
+.card,.panel,.tbl-wrap,.stats-row{background-image:linear-gradient(45deg,#ffffff03 25%,transparent 25%,transparent 75%,#ffffff03 75%),linear-gradient(45deg,#ffffff03 25%,transparent 25%,transparent 75%,#ffffff03 75%);background-size:6px 6px;background-position:0 0,3px 3px}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:200;opacity:.05;mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+.section-title::before{animation:stripeGlow 2.4s ease-in-out infinite}
+@keyframes stripeGlow{50%{box-shadow:0 0 14px var(--or);width:40px}}
+.page-head h1{position:relative}
+.page-head::after{content:"";position:absolute;left:0;bottom:-1px;height:3px;width:0;background:linear-gradient(90deg,var(--or),var(--wh));animation:headLine 1.2s .3s var(--ease) forwards}
+@keyframes headLine{to{width:min(320px,60%)}}
+.btn{position:relative;overflow:hidden}
+.btn::after{content:"";position:absolute;top:0;bottom:0;left:-60%;width:40%;background:linear-gradient(90deg,transparent,#ffffff80,transparent);transform:skewX(-20deg);transition:left .5s}
+.btn:hover::after{left:120%}
+@media (prefers-reduced-motion:reduce){.tilt{transform:none!important}}
+.team-card h3{padding-right:78px}
