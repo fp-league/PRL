@@ -470,7 +470,62 @@
             {
               "d": "df0r2y5",
               "t": "fer",
-              "dnf": false
+              "dnf": false,
+              "grid": 1
+            },
+            {
+              "d": "d1u85sh",
+              "t": "alp",
+              "dnf": false,
+              "grid": 2
+            },
+            {
+              "d": "d7tmqh2",
+              "t": "aud",
+              "dnf": false,
+              "grid": 3
+            },
+            {
+              "d": "dz54cx3",
+              "t": "fer",
+              "dnf": false,
+              "grid": 4
+            },
+            {
+              "d": "dwmmo68",
+              "t": "haa",
+              "dnf": false,
+              "grid": 5
+            },
+            {
+              "d": "d1se4h7",
+              "t": "tbha0he",
+              "dnf": false,
+              "grid": 6
+            },
+            {
+              "d": "dyutcco",
+              "t": "rb",
+              "dnf": false,
+              "grid": 7
+            },
+            {
+              "d": "dazrov5",
+              "t": "mer",
+              "dnf": false,
+              "grid": 8
+            },
+            {
+              "d": "d40gi8w",
+              "t": "mer",
+              "dnf": false,
+              "grid": 9
+            },
+            {
+              "d": "doyn1e9",
+              "t": "alp",
+              "dnf": false,
+              "grid": 10
             }
           ],
           "pole": "",
