@@ -741,3 +741,13 @@ body.is-live #topbar::after{background:linear-gradient(90deg,#e10600,#ff6a00)}
 .arch-pod{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:700;margin-top:4px}
 .arch-pod i{width:4px;height:16px}
 .actions .tabs{margin-bottom:0}
+
+/* ---------- Reserve drivers ---------- */
+.res-tag{display:inline-block;font-size:9px;font-weight:900;letter-spacing:.18em;padding:2px 6px;border:1px solid #9a9a9a;color:#cfcfcf;vertical-align:middle;transform:skewX(-10deg)}
+.res-badge{position:absolute;top:12px;left:12px;z-index:3;background:#fff;color:#0a0a0a;font-size:10px;font-weight:900;letter-spacing:.2em;padding:3px 9px;transform:skewX(-12deg)}
+.drv.is-res{border-style:dashed;border-color:#3a3a3a}
+.drv.is-res .drv-car{opacity:.6;filter:grayscale(.35)}
+.drv.is-res:hover .drv-car{opacity:1;filter:none}
+.team-card .tdrv.rv{color:#bbb;font-weight:600;border-top-style:dashed}
+select.seat{width:auto;display:inline-block;padding:4px 8px;font-size:13px;margin-left:4px;border-color:var(--or)}
+.pf-seat{font-style:normal;display:block;font-size:12px}

@@ -105,6 +105,7 @@ const uid = p => p + Math.random().toString(36).slice(2, 8);
 
 /* ---------- helpers ---------- */
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const isRes = d => d && d.role === 'Reserve';
 const team = id => D.teams.find(t => t.id === id) || { name: '—', color: '#555', id: '' };
 const driver = id => D.drivers.find(d => d.id === id) || { name: 'Unknown', number: '', team: '' };
 const flag = cc => (cc && cc.length === 2) ? String.fromCodePoint(...[...cc.toUpperCase()].map(c => 0x1F1A5 + c.charCodeAt(0))) : '';
@@ -147,7 +148,7 @@ function compute(upTo = Infinity){
   });
   const sorter = (a,b) => b.pts - a.pts || b.wins - a.wins || b.pods - a.pods || a.best - b.best;
   return {
-    drivers: Object.values(ds).filter(s => D.drivers.some(d=>d.id===s.id) || s.starts).sort(sorter),
+    drivers: Object.values(ds).filter(s => { const d = D.drivers.find(x => x.id === s.id); return d ? (!isRes(d) || s.starts) : s.starts; }).sort(sorter),
     teams: Object.values(ts).filter(s => D.teams.some(t=>t.id===s.id)).sort(sorter),
     d: ds, t: ts
   };
@@ -183,7 +184,7 @@ function driverTable(S, limit){
     ${rows.map((s,i) => { const d = driver(s.id), t = team(d.team); return `
       <tr class="${i===0?'top1':''}" style="--tc:${t.color};animation-delay:${i*35}ms">
         <td class="p">${i+1}</td>
-        <td class="who"><span class="tc-bar"></span><a href="#driver-${esc(d.id)}" class="dlink"><b>${esc(d.name)}</b></a> <small style="display:inline;margin-left:6px">#${esc(d.number)}</small><small>${esc(t.name)}</small></td>
+        <td class="who"><span class="tc-bar"></span><a href="#driver-${esc(d.id)}" class="dlink"><b>${esc(d.name)}</b></a>${isRes(d) ? ' <span class="res-tag">RES</span>' : ''} <small style="display:inline;margin-left:6px">#${esc(d.number)}</small><small>${esc(t.name)}</small></td>
         <td>${s.wins}</td><td>${s.pods}</td>
         <td class="gap">${i===0 ? 'Leader' : '-' + (lead - s.pts)}</td>
         <td class="num">${s.pts}</td></tr>`; }).join('')}
@@ -599,13 +600,14 @@ pages.teams = () => {
   const S = compute();
   return head('The Grid', 'Teams', String(D.teams.length).padStart(2,'0'), `${D.teams.length} constructors fighting for the PRL title.`) +
     `<div class="grid g3">${S.teams.map((s,i) => { const t = team(s.id);
-      const dr = D.drivers.filter(d => d.team === t.id);
+      const dr = D.drivers.filter(d => d.team === t.id && !isRes(d)), rv = D.drivers.filter(d => d.team === t.id && isRes(d));
       return `<div class="card team-card reveal tilt" style="--tc:${t.color}">
         <div class="tpts">${s.pts}<small>PTS · P${i+1}</small></div>
         <h3>${esc(t.name)}</h3>
         <div class="team-car">${carSide(t.color, dr[0] ? dr[0].number : '')}</div>
         <div class="meta">${esc(t.base || '')}${t.principal ? ' · TP: ' + esc(t.principal) : ''}</div>
         ${dr.map(d => `<div class="tdrv"><span>${esc(d.name)}</span><span>#${esc(d.number)}</span></div>`).join('') || '<div class="tdrv"><span style="color:var(--mut)">Seats open</span><span></span></div>'}
+        ${rv.map(d => `<div class="tdrv rv"><span>${esc(d.name)} <span class="res-tag">RESERVE</span></span><span>#${esc(d.number)}</span></div>`).join('')}
       </div>`; }).join('')}</div>`;
 };
 
@@ -653,21 +655,26 @@ pages.drivers = () => {
   return head('The Grid', 'Dri<span>vers</span>', String(D.drivers.length).padStart(2,'0')) +
     (D.drivers.length > 1 ? `<div class="actions" style="margin-bottom:18px"><a href="#drivers" class="btn sm ghost" data-goh2h><span>⚔ Head to head</span></a></div>` : '') +
     (!D.drivers.length ? `<div class="empty">No ${esc(tierName())} drivers signed yet.</div>` : '') +
-    `<div class="grid g4">${S.drivers.map((s,i) => { const d = driver(s.id), t = team(d.team);
-      return `<a href="#driver-${esc(d.id)}" class="card drv reveal tilt" style="--tc:${t.color}">
+    `<div class="grid g4">${S.drivers.filter(s => !isRes(driver(s.id))).map(s => drvCard(S, s)).join('')}</div>` +
+    (D.drivers.some(isRes) ? `<h2 class="section-title">Reserve Drivers</h2><p class="sub" style="margin:-6px 0 16px">On standby to jump into any seat when a race driver can't make it.</p>
+      <div class="grid g4">${D.drivers.filter(isRes).map(d => drvCard(S, S.d[d.id] || { id:d.id, pts:0, wins:0, pods:0, poles:0, starts:0 })).join('')}</div>` : '') + h2hHTML(S);
+};
+function drvCard(S, s){
+  const i = S.drivers.findIndex(x => x.id === s.id), d = driver(s.id), res = isRes(d), t = d.team ? team(d.team) : { name:'Reserve pool', color:'#9a9a9a' };
+  return `<a href="#driver-${esc(d.id)}" class="card drv reveal tilt ${res ? 'is-res' : ''}" style="--tc:${t.color}">${res ? '<span class="res-badge">RESERVE</span>' : ''}
         <div class="big">${esc(d.number)}</div>
         <div class="drv-car">${carSide(t.color, d.number)}</div>
-        <div class="flag">${flag(d.country)} ${esc(d.country || '')} · P${i+1}</div>
+        <div class="flag">${flag(d.country)} ${esc(d.country || '')}${i >= 0 ? ' · P' + (i+1) : ''}${res && s.starts ? ' · ' + s.starts + ' start' + (s.starts > 1 ? 's' : '') : ''}</div>
         <h3>${esc(d.name)}</h3>
-        <div class="tm">${esc(t.name)}</div>
+        <div class="tm">${res && d.team ? 'Reserve · ' : ''}${esc(t.name)}</div>
         <div class="stats">
           <div>${s.pts}<small>PTS</small></div>
           <div>${s.wins}<small>WINS</small></div>
           <div>${s.pods}<small>PODS</small></div>
           <div>${s.poles}<small>POLES</small></div>
         </div>
-      </a>`; }).join('')}</div>` + h2hHTML(S);
-};
+      </a>`;
+}
 
 const RAW = `https://raw.githubusercontent.com/${GH.owner}/${GH.repo}/${GH.branch}/`;
 const isWiki = src => /upload\.wikimedia\.org/.test(src || '');
@@ -758,7 +765,7 @@ pages.driver = (id) => {
         <a href="#drivers" class="pf-back">← Drivers</a>
         <div class="kicker"><span class="kt">${esc(tierName())}</span>${flag(d.country)} ${esc(d.country || '')} · #${esc(d.number)}</div>
         <h1>${esc(d.name)}</h1>
-        <div class="pf-team"><i></i>${esc(t.name)}</div>
+        <div class="pf-team"><i></i>${isRes(d) ? `<span class="res-tag">RESERVE</span> ${d.team ? esc(t.name) : 'Reserve pool'}` : esc(t.name)}</div>
         ${d.bio ? `<p class="sub">${esc(d.bio)}</p>` : ''}
         <div class="pf-stats">
           <div><b>${pos ? 'P' + pos : '—'}</b><span>CHAMPIONSHIP</span></div>
@@ -780,7 +787,7 @@ pages.driver = (id) => {
     <div class="panel reveal">${chart}</div>
     <h2 class="section-title">Race by Race</h2>
     <div class="grid g4">${rows.map(({r, c}) => `<a href="#results" data-round="${r.round}" class="card pf-race reveal ${c && c.pos===1 ? 'won' : ''}">
-        <small>R${r.round} ${flag(r.country)}</small><b>${c ? (c.pos === 'DNF' ? 'DNF' : 'P' + c.pos) : '—'}</b><span>${esc(r.name)}</span><em>${c && c.pts ? '+' + c.pts + ' pts' : ''}</em></a>`).join('') || '<div class="empty">No races yet.</div>'}</div>
+        <small>R${r.round} ${flag(r.country)}</small><b>${c ? (c.pos === 'DNF' ? 'DNF' : 'P' + c.pos) : '—'}</b><span>${esc(r.name)}</span><em>${c && c.pts ? '+' + c.pts + ' pts' : ''}${c && isRes(d) ? ` <i class="pf-seat" style="color:${team(c.t).color}">in the ${esc(team(c.t).name)}</i>` : ''}</em></a>`).join('') || '<div class="empty">No races yet.</div>'}</div>
     ${mate ? `<div class="actions" style="margin-top:28px"><a class="btn ghost" href="#drivers" data-h2h="${d.id}:${mate.id}"><span>⚔ Head to head vs teammate ${esc(mate.name)}</span></a></div>` : ''}`;
 };
 
@@ -950,8 +957,8 @@ const driverOpts = (sel, blank) => (blank ? `<option value="">${blank}</option>`
 /* generic CRUD editor */
 const CRUD = {
   drivers: { title:'Driver', id:'d', list:()=>[...D.drivers].sort((a,b)=>a.number-b.number),
-    label:x=>`#${esc(x.number)} ${esc(x.name)}`, sub:x=>team(x.team).name,
-    fields:[{k:'name',l:'Name / Gamertag'},{k:'number',l:'Number',t:'number'},{k:'team',l:'Team',t:'team'},{k:'country',l:'Country code (e.g. GB)'},{k:'photo',l:'Photo / helmet (optional)',t:'image',dir:'drivers'},{k:'bio',l:'Short bio (optional)',t:'textarea'}] },
+    label:x=>`#${esc(x.number)} ${esc(x.name)}`, sub:x=>(isRes(x) ? 'RESERVE' + (x.team ? ' · ' + team(x.team).name : '') : team(x.team).name),
+    fields:[{k:'name',l:'Name / Gamertag'},{k:'number',l:'Number',t:'number'},{k:'role',l:'Role',t:'select',o:['Race seat','Reserve']},{k:'team',l:'Team (reserves: optional)',t:'teamOpt'},{k:'country',l:'Country code (e.g. GB)'},{k:'photo',l:'Photo / helmet (optional)',t:'image',dir:'drivers'},{k:'bio',l:'Short bio (optional)',t:'textarea'}] },
   teams: { title:'Team', id:'t', list:()=>D.teams,
     label:x=>esc(x.name), sub:x=>`${x.base||''} ${x.principal?'· TP: '+x.principal:''}`,
     fields:[{k:'name',l:'Team name'},{k:'color',l:'Colour',t:'color'},{k:'base',l:'Base'},{k:'principal',l:'Team principal'}] },
@@ -976,7 +983,7 @@ function crudView(key){
     const v = cur[f.k] ?? '';
     switch (f.t) {
       case 'team': return `<select name="${f.k}">${teamOpts(v)}</select>`;
-      case 'teamOpt': return `<select name="${f.k}">${teamOpts(v, f.k==='from'?'Free Agent':'Released / None')}</select>`;
+      case 'teamOpt': return `<select name="${f.k}">${teamOpts(v, f.k==='from'?'Free Agent':f.k==='team'?'No team (free reserve)':'Released / None')}</select>`;
       case 'select': return `<select name="${f.k}">${f.o.map(o=>`<option ${o===v?'selected':''}>${o}</option>`).join('')}</select>`;
       case 'textarea': return `<textarea name="${f.k}">${esc(v)}</textarea>`;
       case 'driverText': return `<input type="text" name="${f.k}" list="dl-drivers" value="${esc(v)}"><datalist id="dl-drivers">${D.drivers.map(d=>`<option value="${esc(d.name)}">`).join('')}</datalist>`;
@@ -1012,7 +1019,7 @@ function resultsView(){
   adminTabs.round = rnd;
   if (!resDraft || resDraft.round !== rnd) {
     const ex = resultFor(rnd);
-    resDraft = ex ? clone(ex) : { round:rnd, entries:D.drivers.map(d => ({ d:d.id, t:d.team, dnf:false })), pole:'', fl:'', notes:'' };
+    resDraft = ex ? clone(ex) : { round:rnd, entries:D.drivers.filter(d => !isRes(d)).map(d => ({ d:d.id, t:d.team, dnf:false })), pole:'', fl:'', notes:'' };
   }
   let p = 0;
   return `<div class="panel">
@@ -1022,17 +1029,19 @@ function resultsView(){
       <label class="field">Pole position<select id="resPole">${driverOpts(resDraft.pole,'—')}</select></label>
       <label class="field">Fastest lap<select id="resFl">${driverOpts(resDraft.fl,'—')}</select></label>
     </div>
-    <p class="sub" style="margin:0 0 12px">Put drivers in finishing order with the arrows. Optional: grid slot and gap (e.g. 1:32:10.4 for the winner, +3.214 or +1 LAP for others) — these power the TV timing tower. Tick DNF for retirements; ✕ removes drivers who didn't race.</p>
+    <p class="sub" style="margin:0 0 12px">Put drivers in finishing order with the arrows. Optional: grid slot and gap (e.g. 1:32:10.4 for the winner, +3.214 or +1 LAP for others) — these power the TV timing tower. Tick DNF for retirements; ✕ removes drivers who didn't race. <b>Reserve standing in?</b> ✕ the regular driver, add the reserve below and pick whose seat they took — the points go to that team.</p>
     <div class="order-list">${resDraft.entries.map((e,i) => { const t = team(e.t); const lbl = e.dnf ? 'DNF' : 'P' + (++p); return `
       <div class="order-item ${e.dnf?'dnf':''}" style="--tc:${t.color}">
         <span class="pnum">${lbl}</span>
-        <span><b>${esc(driver(e.d).name)}</b> <small style="color:var(--mut)">${esc(t.name)}</small></span>
+        <span><b>${esc(driver(e.d).name)}</b> ${isRes(driver(e.d)) || e.t !== driver(e.d).team
+          ? `<span class="res-tag">RESERVE</span> <select class="seat" data-seat="${i}" title="Which team's car they drove">${teamOpts(e.t, '— pick team seat —')}</select>`
+          : `<small style="color:var(--mut)">${esc(t.name)}</small>`}</span>
         <span class="rx"><input type="number" min="1" placeholder="Grid" title="Starting position" data-grid="${i}" value="${esc(e.grid||'')}"><input type="text" placeholder="${p===1&&!e.dnf?'Time':'+Gap'}" title="Race time / gap (optional)" data-gap="${i}" value="${esc(e.gap||'')}"></span>
         <label class="chk"><input type="checkbox" data-dnf="${i}" ${e.dnf?'checked':''}>DNF</label>
         <span style="display:flex;gap:4px"><button class="mini" data-mv="${i}:-1">▲</button><button class="mini" data-mv="${i}:1">▼</button></span>
         <button class="mini del" data-rm="${i}" title="Didn't race">✕</button>
       </div>`; }).join('')}</div>
-    ${D.drivers.filter(d => !resDraft.entries.some(e=>e.d===d.id)).length ? `<div class="actions" style="margin-top:10px"><select id="resAdd">${D.drivers.filter(d => !resDraft.entries.some(e=>e.d===d.id)).map(d=>`<option value="${d.id}">${esc(d.name)}</option>`).join('')}</select><button class="mini" data-addrow>+ Add driver back</button></div>` : ''}
+    ${D.drivers.filter(d => !resDraft.entries.some(e=>e.d===d.id)).length ? `<div class="actions" style="margin-top:10px"><select id="resAdd">${D.drivers.filter(d => !resDraft.entries.some(e=>e.d===d.id)).map(d=>`<option value="${d.id}">${isRes(d) ? '🔁 Reserve: ' : ''}${esc(d.name)}</option>`).join('')}</select><button class="mini" data-addrow>+ Add driver / reserve</button></div>` : ''}
     <label class="field" style="margin-top:16px">Race notes (optional)<textarea id="resNotes" style="min-height:70px">${esc(resDraft.notes||'')}</textarea></label>
     <div class="actions" style="margin-top:16px">
       <button class="btn" data-saveres><span>Save Result</span></button>
@@ -1250,6 +1259,7 @@ app.addEventListener('click', async e => {
   if (t.dataset.saveres !== undefined) {
     resDraft.pole = document.getElementById('resPole').value; resDraft.fl = document.getElementById('resFl').value;
     resDraft.notes = document.getElementById('resNotes').value.trim();
+    if (resDraft.entries.some(e => !e.t)) { toast('Pick a team seat for each reserve'); return; }
     D.results = D.results.filter(r => r.round !== resDraft.round).concat(clone(resDraft));
     save(`Round ${resDraft.round} result saved`); render(true); return;
   }
@@ -1304,6 +1314,7 @@ app.addEventListener('input', e => {
 });
 app.addEventListener('change', e => {
   const t = e.target;
+  if (t.dataset.seat !== undefined && resDraft) { resDraft.entries[+t.dataset.seat].t = t.value; render(true); return; }
   if (t.dataset.h2hsel !== undefined) { pages.drivers.h2h[+t.dataset.h2hsel] = t.value; render(true); return; }
   if (t.id === 'resRound') { adminTabs.round = +t.value; resDraft = null; render(true); }
   if (t.dataset.dnf) { const i = +t.dataset.dnf; const a = resDraft.entries; a[i].dnf = t.checked;
