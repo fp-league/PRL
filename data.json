@@ -453,7 +453,21 @@
           "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/2023_Las_Vegas_street_circuit.svg/1280px-2023_Las_Vegas_street_circuit.svg.png"
         }
       ],
-      "results": []
+      "results": [
+        {
+          "round": 1,
+          "entries": [
+            {
+              "d": "df0r2y5",
+              "t": "fer",
+              "dnf": false
+            }
+          ],
+          "pole": "",
+          "fl": "",
+          "notes": ""
+        }
+      ]
     },
     "t2": {
       "name": "Tier 2",
