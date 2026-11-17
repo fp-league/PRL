@@ -252,6 +252,16 @@
           "number": 0,
           "team": "rb",
           "country": ""
+        },
+        {
+          "id": "dsek705",
+          "name": "GOOFY",
+          "number": 0,
+          "role": "Reserve",
+          "team": "",
+          "country": "",
+          "photo": "",
+          "bio": ""
         }
       ],
       "calendar": [
@@ -373,5 +383,12 @@
     }
   },
   "news": [],
-  "transfers": []
+  "transfers": [],
+  "hall": [],
+  "archive": [],
+  "live": {
+    "mode": "auto",
+    "url": "",
+    "note": ""
+  }
 }
